@@ -31,6 +31,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
   administrador: [
     { path: '', label: 'Panel principal', icon: LayoutDashboard },
     { path: 'usuarios', label: 'Usuarios', icon: Users },
+    { path: 'catalogos', label: 'Catálogos académicos', icon: BookOpen },
     { path: 'solicitudes', label: 'Solicitudes', icon: ClipboardCheck },
     { path: 'estudiantes', label: 'Estudiantes', icon: GraduationCap },
   ],

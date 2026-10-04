@@ -61,15 +61,15 @@ Creación:
 ```json
 {
   "nombres_completos": "Juan Pérez",
+  "tipo_identificacion": "cedula",
   "cedula": "1234567890",
   "email": "juan@example.com",
   "numero_celular": "0999999999",
-  "password": "UnaClaveSegura123!",
   "rol_id": 2
 }
 ```
 
-`cedula` admite de 10 a 20 caracteres; `numero_celular`, de 7 a 20. Cédula y correo son únicos. `rol_id` debe existir. La contraseña se almacena con hash. Una actualización omite la contraseña si no se envía. El administrador autenticado no puede desactivar su propia cuenta ni quitarse su propio rol administrativo; esos conflictos devuelven 409. Al desactivar a otro usuario se revocan todos sus tokens.
+`tipo_identificacion` selecciona cédula (10 dígitos) o pasaporte (5–20 letras mayúsculas/números); `numero_celular`, de 7 a 20. Cédula y correo son únicos. `rol_id` debe existir. El sistema genera la contraseña temporal y la envía por correo; no se permite establecerla desde el formulario administrativo. El administrador autenticado no puede desactivar su propia cuenta ni quitarse su propio rol administrativo; esos conflictos devuelven 409. Al desactivar a otro usuario se revocan todos sus tokens.
 
 Estado:
 
@@ -170,8 +170,8 @@ Todas las rutas requieren Sanctum, cuenta activa y rol `Estudiante`. El propieta
 | POST | `/student/solicitudes` | Crea una solicitud pendiente con sus documentos requeridos. |
 | GET | `/student/solicitudes/{id}` | Detalle, requisitos, archivos, observaciones, historial y resultado propios. |
 | PATCH | `/student/solicitudes/{id}` | Modifica `procedencia_estudios` mientras esté pendiente. |
-| POST | `/student/solicitudes/{id}/enviar` | Envía la solicitud completa o corregida a revisión. |
-| POST | `/student/solicitudes/{id}/documentos/{documento}` | Carga o reemplaza el PDF de un documento requerido. |
+| POST | `/student/solicitudes/{id}/enviar` | Retirado: 410. La revisión inicia con recepción presencial. |
+| POST | `/student/solicitudes/{id}/documentos/{documento}` | Retirado: 410. Entrega presencial al coordinador. |
 | GET | `/student/solicitudes/{id}/documentos/{documento}/download` | Descarga privada del documento propio. |
 | GET | `/student/solicitudes/{id}/resolucion/download` | Descarga privada de la resolución cuando el estado es `listo`. |
 | GET | `/student/notificaciones` | Avisos propios paginados; `sin_leer=1` filtra los pendientes. |
@@ -191,34 +191,63 @@ Primero se consulta el catálogo y se selecciona una asignación del estudiante.
 
 `procedencia_estudios` admite hasta 255 caracteres. Se requiere un coordinador activo y al menos un requisito configurado. Los requisitos generales del trámite y los específicos de la carrera se incorporan a la solicitud como documentos pendientes. Incorporar requisitos nuevos al catálogo no modifica solicitudes ya creadas. La carrera queda guardada en `solicitudes.carrera_id`; no cambia cuando se modifica una asignación posterior.
 
-No puede existir otra solicitud activa del mismo estudiante, carrera y trámite. Para esta regla, `listo` y `rechazado` son estados finales. La creación devuelve 201; los conflictos de configuración, coordinador o duplicidad devuelven 409 sin dejar registros parciales. La creación está limitada a 20 solicitudes/minuto y los uploads a 30/minuto.
+No puede existir otra solicitud activa del mismo estudiante, carrera y trámite. Para esta regla, `listo` y `rechazado` son estados finales. La creación devuelve 201; los conflictos de configuración, coordinador o duplicidad devuelven 409 sin dejar registros parciales. La creación está limitada a 20 solicitudes/minuto ; las cargas del estudiante están retiradas.
 
-### Envío y correcciones
+## Gestión presencial y nuevos CRUD
 
-Flujo acordado:
+La documentación se entrega físicamente. **Solo el coordinador valida el checklist**; el administrador configura los requisitos y el estudiante consulta el resultado. Los PDF históricos siguen disponibles mediante descarga privada, pero ya no se cargan ni reemplazan desde el estudiante. La carga de resoluciones y la generación del informe técnico PDF se conservan.
 
-```text
-pendiente → completar documentos → enviar → en_revision
-observado → corregir documentos señalados → reenviar → en_revision
-```
+### Identificación y estudiantes
 
-El envío exige antecedentes académicos y todos los archivos requeridos presentes en almacenamiento, con estado `presentado` o `aprobado` (estos últimos deben tener `validez=true`). Los faltantes devuelven 422 en `errors.antecedentes` o `errors.documentos`. Enviar de nuevo una solicitud ya en revisión devuelve 409 y no duplica el historial. El estudiante no puede aprobar documentos ni establecer estados administrativos.
+Seleccionar `tipo_identificacion` (`cedula` o `pasaporte`) antes de ingresar `cedula` (se conserva este nombre de campo por compatibilidad). Cédula: exactamente 10 dígitos. Pasaporte: 5–20 letras mayúsculas o números, sin espacios. Es validación de formato, no una consulta al Registro Civil. Ambos identificadores son únicos. El filtro `tipo_identificacion` se admite en usuarios administrativos y estudiantes del coordinador; `search` busca nombre, identificación o correo.
 
-La carga usa `multipart/form-data`, campo `archivo`, PDF validado por contenido MIME. El límite proviene de `MAX_PRIVATE_PDF_SIZE_KB` (10240 KB por defecto). `upload_max_filesize` y `post_max_size` deben admitir un valor igual o mayor. Cambiar la extensión de un archivo no lo convierte en PDF válido.
+Rutas relativas a `/api/v1`:
 
-En una solicitud pendiente se pueden cargar/reemplazar documentos `pendiente` o `presentado`. En una solicitud observada se permiten documentos `observado` o todavía `pendiente`; los aprobados quedan protegidos. Una corrección vuelve a `presentado`, reinicia `validez=false` y conserva las observaciones históricas. El archivo anterior se elimina solo después de persistir el reemplazo; si falla la base, se conserva el anterior y se elimina el nuevo. No se ofrece un archivo histórico de versiones de PDF.
+| Método y ruta | Comportamiento |
+| --- | --- |
+| `GET /coordinator/students` | Listar y filtrar estudiantes dentro del alcance del coordinador. |
+| `POST /coordinator/students` | Crear exclusivamente una cuenta de estudiante, enviar contraseña temporal y asignar destino. |
+| `GET /coordinator/students/{id}` | Consultar estudiante y asignaciones visibles. |
+| `PUT /coordinator/students/{id}` | Editar datos y destino de un estudiante actualmente asignado. |
+| `DELETE /coordinator/students/{id}` | Desactivar conservando el historial; 409 si tiene solicitudes activas. |
+| `PATCH /coordinator/students/{id}/status` | Activar/desactivar mediante `cuenta_activa`. |
 
-Los archivos se guardan en el disco privado `local`. La API entrega enlaces de descarga autenticada, nunca rutas físicas. Un archivo ausente devuelve 404. La resolución no se expone al estudiante antes del estado `listo`, aunque ya haya sido registrada por el Administrador.
+Crear/editar requiere `nombres_completos`, `tipo_identificacion`, `cedula`, `email`, `numero_celular`, `carrera_id` y `modalidad_id`. Carrera de destino: una de las asignadas al coordinador. Modalidad: activa y asociada a esa carrera. No se puede cambiar el destino durante una solicitud activa. La carrera e institución de **origen** permanecen en los antecedentes académicos; pueden ser externas. No enviar contraseña ni rol desde este formulario.
+
+### Catálogos del administrador
+
+`GET /admin/catalogs` devuelve `facultades`, `carreras`, `modalidades`, `requisitos` y `tramites`. Para cada catálogo (`facultades`, `carreras`, `modalidades`, `requisitos`):
+
+- `POST /admin/catalogs/{catalog}`: crear.
+- `GET /admin/catalogs/{catalog}/{id}`: consultar.
+- `PUT /admin/catalogs/{catalog}/{id}`: editar.
+- `DELETE /admin/catalogs/{catalog}/{id}`: eliminar solo si no tiene referencias; de lo contrario 409. Puede desactivarse con `activa=false` mediante PUT.
+
+Todos requieren `nombre` y `activa`. Carreras: también `facultad_id` y `modalidad_ids` (lista no vacía). Requisitos: `tramite_proceso_id`, `carrera_id` nullable (null = todas las carreras), `descripcion` nullable y `obligatorio` booleano. Un destino con alumnos asignados no puede perder sus modalidades en uso. La configuración se incorpora como copia en cada solicitud nueva: editar/desactivar un requisito no altera expedientes anteriores. Debe existir al menos un requisito obligatorio activo al crear una solicitud.
+
+Modalidades iniciales: Presencial, Híbrida y En línea, publicadas en el [portal de pregrado de la UEB](https://www.ueb.edu.ec/index.php/pregrado?mode=hibrida). El administrador selecciona las ofrecidas por cada carrera. Los datos marcados `[DEMO]` son ejemplos y no representan el catálogo institucional oficial.
+
+### Checklist y transiciones automáticas
+
+`PATCH /coordinator/documents/{id}/review` acepta:
+
+| `estado` | Uso |
+| --- | --- |
+| `presentado` | Registrar recepción física o recepción de una corrección. No implica aprobación. |
+| `aprobado` | Validar un documento recibido. Registra también la verificación en la misma transacción. |
+| `observado` | Indicar incumplimiento; `observacion` es obligatoria (hasta 2000 caracteres). Invalida verificaciones previas. |
+
+El primer registro inicia `en_revision`. Un requisito obligatorio observado pasa la solicitud a `observado`. Recibir las correcciones pendientes permite volver a `en_revision`. Cuando todos los requisitos obligatorios están validados se pasa automáticamente a `en_proceso`, para análisis académico. No se aprueba automáticamente la homologación. En etapas posteriores ya no se modifica el checklist.
+
+El estudiante obtiene `progreso_documental` (0–100) en el detalle y consulta `documentos`, con `obligatorio`, `presentado`, `recibido_at`, `revisado_at`, responsables y observaciones. El porcentaje es `floor(100 × obligatorios validados / total obligatorios)`; sin requisitos es 0. Los complementarios no incrementan ni bloquean el porcentaje. Se conservan el historial de estados, las observaciones y una auditoría en `historial_documentos`.
+
+Rutas retiradas (410 para recursos propios): `POST /student/solicitudes/{id}/enviar`, `POST /student/solicitudes/{id}/documentos/{documento}` y `POST /coordinator/documents/{id}/verification`. No construir controles de subida, reenvío o doble verificación. `puede_enviar` siempre es false.
 
 ### Notificaciones
 
 Los avisos se guardan en la base de datos y se consultan desde el frontend. El correo se habilita con `STUDENT_MAIL_NOTIFICATIONS=true` y se procesa mediante cola, por lo que SMTP no bloquea la transacción principal. Se generan al crear registros Eloquent de historial de estado, observación documental o resolución; las escrituras SQL directas o eventos deshabilitados no generan avisos.
 
 Los avisos contienen `solicitud_id`, `evento`, `mensaje` y `url`. Los tipos son `estado_actualizado`, `documento_observado` y `resolucion_registrada`. El listado devuelve `data`, `links`, `meta` y el total `sin_leer`. Los avisos de una transacción revertida se revierten junto con sus datos.
-
-## Alcance restante
-
-El flujo backend de Estudiante y Coordinador está implementado. El frontend es independiente. Los catálogos y asignaciones institucionales reales deben configurarse antes de operar con estudiantes reales; los datos `[DEMO]` son exclusivamente de desarrollo.
 
 ## Coordinador
 
@@ -239,22 +268,7 @@ Las búsquedas de estudiantes consideran nombres, cédula y correo. El detalle n
 
 ### Documentos y verificaciones
 
-| Método | Endpoint | Query/body y validación | Respuesta correcta | Errores específicos |
-| --- | --- | --- | --- | --- |
-| GET | `/coordinator/solicitudes/{id}/documents` | — | 200; documentos y revisiones | 404 solicitud ajena |
-| GET | `/coordinator/documents/{id}` | — | 200; requisito, estado, observaciones y verificaciones | 404 documento ajeno |
-| GET | `/coordinator/documents/{id}/download` | — | 200 `application/pdf`, descarga privada | 404 ajeno/archivo ausente |
-| PATCH | `/coordinator/documents/{id}/review` | `estado`: `aprobado`/`observado`; `observacion` obligatoria al observar, máx. 2000 | 200; documento actualizado | 404 ajeno; 409 etapa/archivo; 422 body |
-| POST | `/coordinator/documents/{id}/verification` | `estado` booleano | 200; verificación creada o actualizada | 404 ajeno; 409 etapa; 422 body |
-
-```json
-{
-  "estado": "observado",
-  "observacion": "El documento no contiene todas las páginas."
-}
-```
-
-Observar crea un registro histórico en `observaciones_documentacion`, cambia la solicitud a `observado` y notifica al Estudiante. Se permite continuar revisando otros documentos en `observado` sin duplicar esa transición. Observar o reemplazar un archivo elimina sus verificaciones vigentes; el reemplazo conserva observaciones y vuelve el documento a `presentado` con `validez=false`. Verificar exige un archivo existente en estado `presentado` o `aprobado`. El estudiante reenvía la solicitud a `en_revision`; solo desde esa etapa, con todos los archivos presentes, aprobados y con al menos una verificación por documento y todas positivas, se avanza a `en_proceso`.
+Consultar el apartado «Checklist y transiciones automáticas». GET de documentos y descargas históricas conserva el alcance por carrera. PATCH review recibe `presentado`, `aprobado` u `observado`; la verificación separada está retirada (410).
 
 ### Mallas, asignaturas y sílabos
 
@@ -327,3 +341,26 @@ Cada transición crea una fila, nunca sobrescribe historial, y registra `usuario
 - Las descargas usan únicamente `download_url` o endpoints documentados; nunca se construyen rutas de `storage`.
 - Errores: 401 token, 403 rol/carrera, 404 aislamiento de recurso, 409 conflicto de flujo y 422 validación con `errors`.
 - El frontend debe refrescar el detalle tras cada escritura porque una revisión, resultado o resolución puede cambiar automáticamente el estado.
+
+
+## Contraseña temporal y recuperación
+
+Las cuentas creadas por `POST /api/v1/admin/users` reciben una contraseña aleatoria por correo. No enviar `password` al crear o editar usuarios: se rechaza con 422. Las cuentas existentes conservan su acceso. La contraseña temporal caduca en 24 horas (`TEMPORARY_PASSWORD_HOURS`). Se almacena únicamente su hash; si el envío falla, la creación se revierte y puede reintentarse.
+
+`POST /login` y `GET /me` devuelven `user.must_change_password`. Si es `true`, mostrar exclusivamente cambio de contraseña o cierre de sesión. El resto de la API devuelve 403 con `code: PASSWORD_CHANGE_REQUIRED`.
+
+Rutas relativas a `/api/v1`:
+
+| Método y ruta | Datos | Acceso |
+| --- | --- | --- |
+| `POST /change-password` | `current_password`, `password`, `password_confirmation` | Bearer, cuenta activa; permitido durante el primer ingreso |
+| `POST /forgot-password` | `email` | Público, limitado; respuesta genérica para no revelar cuentas |
+| `POST /reset-password` | `email`, `token`, `password`, `password_confirmation` | Público, limitado; token válido durante 60 minutos y de un solo uso |
+
+La nueva contraseña requiere 12 caracteres como mínimo, mayúsculas, minúsculas y números. El cambio inicial exige una contraseña diferente. Al cambiar o recuperar la contraseña se revocan todos los tokens y sesiones; borrar el token local y volver al login. Recuperar la contraseña también permite activar una cuenta cuya contraseña temporal caducó. Las cuentas inactivas no reciben enlaces.
+
+El enlace de recuperación abre el frontend con `?reset_token=...&email=...`. El frontend incluido ya implementa estas pantallas. `FRONTEND_URL` debe apuntar al frontend; si contiene varios orígenes, el primero se utiliza para los correos.
+
+En desarrollo, `MAIL_MAILER=log` escribe los correos en `storage/logs/laravel.log`, **sin enviarlos a una bandeja real**. Para entrega real se requiere configurar el transporte SMTP en `.env`, limpiar la configuración y probar la recepción con una cuenta controlada. No publicar `.env` ni registros que contengan contraseñas temporales o enlaces.
+
+Al actualizar ejecutar `php artisan migrate --no-interaction`. No usar `migrate:fresh` sobre datos que se quieran conservar. La migración añade `must_change_password` y `temporary_password_expires_at` sin reiniciar las contraseñas existentes.

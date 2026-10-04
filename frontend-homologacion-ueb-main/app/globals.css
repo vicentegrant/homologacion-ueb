@@ -168,3 +168,30 @@ select.compact { padding: 6px 9px; font-size: 11px; }
 }
 
 .status { font-size: 11px; font-weight: 600; white-space: nowrap; }
+
+/* Gestión académica y seguimiento presencial */
+.catalog-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:22px 0; }
+.catalog-tabs button { display:flex; align-items:center; gap:10px; padding:18px; border:1px solid #dce6ef; border-radius:14px; background:#fff; color:#51687d; cursor:pointer; text-align:left; transition:background .15s,border-color .15s; }
+.catalog-tabs button.selected { background:#133d63; color:#fff; border-color:#133d63; box-shadow:0 6px 20px #163f621c; }
+.catalog-tabs b { margin-left:auto; font-size:18px; }
+.catalog-checks { border:1px solid #dce6ef; border-radius:10px; padding:14px; display:flex; gap:16px; flex-wrap:wrap; }
+.catalog-checks label { display:flex; align-items:center; gap:8px; }
+.catalog-checks input { width:auto; }
+.management-banner { display:flex; gap:18px; align-items:center; padding:24px; margin:0 0 22px; border:1px solid #d1e4ef; border-radius:16px; background:linear-gradient(110deg,#e9f4f8,#f7fbfd); color:#224962; }
+.management-banner strong { font-size:17px; }.management-banner p { font-size:13px; margin:6px 0 0; color:#5e7586; }.management-banner>span { margin-left:auto; white-space:nowrap; font-size:13px; font-weight:600; }
+.management-toolbar { display:flex; align-items:center; gap:12px; margin-bottom:18px; }.management-toolbar .search-box { flex:1; }.management-toolbar select { padding:10px 12px; border:1px solid #dce6ef; border-radius:8px; background:white; }
+.cell-description { display:block; color:#6c7d90; margin-top:5px; font-size:12px; line-height:1.5; max-width:46ch; }.row-actions { display:flex; gap:6px; align-items:center; }.danger-text { color:#b83939; }
+.confirm-banner { display:flex; align-items:center; gap:12px; padding:18px; margin-bottom:16px; border:1px solid #ecd1bd; border-radius:12px; background:#fffbf5; font-size:14px; }.confirm-banner>div,.confirm-banner>p { flex:1; }.confirm-banner p { margin:4px 0; }
+.checklist-summary { display:flex; align-items:center; gap:24px; padding:24px; background:#f0f8f7; border:1px solid #d7ece7; border-radius:14px; margin-bottom:20px; }.checklist-score { color:#14745e; font-size:38px; font-weight:700; letter-spacing:-.04em; }.checklist-summary>div:last-child { flex:1; }.checklist-summary p { font-size:13px; margin:6px 0 12px; color:#527469; }.checklist-summary progress { display:block; width:100%; height:10px; border-radius:10px; overflow:hidden; accent-color:#16866c; }.checklist-summary progress::-webkit-progress-bar { background:#dbece7; }.checklist-summary progress::-webkit-progress-value { background:#16866c; border-radius:10px; }
+.document-step { width:34px; height:34px; display:grid; place-items:center; border-radius:50%; background:#e9f0f5; color:#58708a; font-weight:700; flex-shrink:0; }.document-step.validated { background:#dff3eb; color:#168363; }
+.doc-item { padding:20px 4px; gap:18px; }.doc-main strong { font-size:14px; }.doc-main p { line-height:1.65; }.doc-observation { border-left:3px solid #d89b32; padding:7px 11px; background:#fff9ef; border-radius:0 6px 6px 0; }
+.panel { background:#fff; border-color:#e0e8f0; }.panel-head { padding:18px 20px; }.panel-head h3 { font-size:15px; }.page-subtitle { font-size:14px; line-height:1.6; }.btn { min-height:36px; }.data-table td { padding-top:16px; padding-bottom:16px; }.data-table { font-size:13px; }
+button:focus-visible,a:focus-visible { outline:3px solid #68a8d6; outline-offset:3px; }
+@media(max-width:900px) { .catalog-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); }.management-banner>span { display:none; } }
+@media(max-width:600px) { .catalog-tabs button { padding:13px 10px; font-size:12px; }.management-toolbar,.confirm-banner { flex-wrap:wrap; }.management-toolbar .search-box { flex-basis:100%; }.management-banner { padding:18px; }.checklist-summary { padding:18px; gap:14px; }.row-actions { flex-wrap:wrap; }.doc-item { flex-wrap:wrap; } }
+
+.search-box { display:flex; align-items:center; gap:9px; padding:10px 12px; border:1px solid #d7e3ee; border-radius:9px; background:#fbfdff; color:#698199; min-width:0; }
+.search-box input { border:0; outline:none; background:transparent; width:100%; min-width:0; font-size:13px; }
+.form-grid.management-form { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }.management-form p.muted { align-self:center; font-size:13px; line-height:1.7; }.management-form input,.management-form select { font-size:14px; min-height:42px; }.management-form label { font-size:13px; }
+.student-checklist .doc-item { display:grid; grid-template-columns:34px minmax(0,1fr) auto; padding:20px; }.student-checklist .doc-main { min-width:0; }.student-checklist .doc-actions:empty { display:none; }.student-checklist .doc-actions:not(:empty) { grid-column:2 / -1; }
+@media(max-width:600px) { .form-grid.management-form { grid-template-columns:minmax(0,1fr); }.student-checklist .doc-item { grid-template-columns:30px minmax(0,1fr); padding:15px; gap:10px; }.student-checklist .doc-item>.status { grid-column:2; }.student-checklist .document-step { grid-row:1 / span 2; }.student-checklist .doc-main small { line-height:1.5; display:block; } }

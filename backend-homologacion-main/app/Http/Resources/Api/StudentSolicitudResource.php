@@ -33,7 +33,12 @@ class StudentSolicitudResource extends JsonResource
             ]),
             'estado_actual' => $state,
             'puede_editar' => $state === 'pendiente',
-            'puede_enviar' => in_array($state, ['pendiente', 'observado'], true),
+            'puede_enviar' => false,
+            'progreso_documental' => $this->whenLoaded('documentos', function (): int {
+                $required = $this->resource->documentos->where('obligatorio', true);
+
+                return $required->isEmpty() ? 0 : (int) floor(100 * $required->filter(fn ($d): bool => $d->estadoDocumento->nombre === 'aprobado' && $d->validez)->count() / $required->count());
+            }),
             'documentos' => StudentDocumentResource::collection($this->whenLoaded('documentos')),
             'historial_estados' => $this->whenLoaded('historialEstados', fn () => $this->resource->historialEstados->sortBy('id')->values()->map(fn (HistorialEstadoSolicitud $history): array => [
                 'id' => $history->id, 'estado' => $history->estadoSolicitud->nombre,

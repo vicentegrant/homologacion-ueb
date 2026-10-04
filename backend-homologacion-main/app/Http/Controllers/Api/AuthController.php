@@ -37,6 +37,10 @@ class AuthController extends Controller
             return response()->json(['success' => false, 'message' => 'La cuenta se encuentra inactiva.'], 403);
         }
 
+        if ($user->must_change_password && $user->temporary_password_expires_at?->isPast()) {
+            return response()->json(['success' => false, 'message' => 'La contraseña temporal caducó. Utilice Recuperar contraseña.'], 403);
+        }
+
         $token = (string) $user->createToken('frontend')->plainTextToken;
 
         return response()->json([
@@ -73,9 +77,11 @@ class AuthController extends Controller
             'id' => $user->id,
             'nombres_completos' => $user->nombres_completos,
             'cedula' => $user->cedula,
+            'tipo_identificacion' => $user->tipo_identificacion,
             'email' => $user->email,
             'numero_celular' => $user->numero_celular,
             'cuenta_activa' => $user->cuenta_activa,
+            'must_change_password' => $user->must_change_password,
             'roles' => $user->getRoleNames()->values()->all(),
         ];
 

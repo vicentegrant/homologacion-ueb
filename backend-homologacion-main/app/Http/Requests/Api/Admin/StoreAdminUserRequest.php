@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Api\Admin;
 
+use App\Rules\IdentificationNumber;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class StoreAdminUserRequest extends FormRequest
 {
@@ -26,10 +26,11 @@ class StoreAdminUserRequest extends FormRequest
     {
         return [
             'nombres_completos' => ['required', 'string', 'max:255'],
-            'cedula' => ['required', 'string', 'between:10,20', Rule::unique('users', 'cedula')],
+            'tipo_identificacion' => ['required', 'string', 'in:cedula,pasaporte'],
+            'cedula' => ['required', 'string', new IdentificationNumber($this->input('tipo_identificacion', $this->route('user')?->tipo_identificacion ?? 'cedula')), Rule::unique('users', 'cedula')],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'numero_celular' => ['required', 'string', 'between:7,20'],
-            'password' => ['required', 'string', Password::defaults()],
+            'password' => ['prohibited', 'string'],
             'rol_id' => ['required', 'integer', Rule::exists('roles', 'id')],
         ];
     }

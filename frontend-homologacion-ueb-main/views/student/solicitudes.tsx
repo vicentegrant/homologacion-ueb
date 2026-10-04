@@ -66,7 +66,7 @@ export function StudentSolicitudes() {
 
   return (
     <>
-      <PageHeader kicker="MIS TRÁMITES" title="Mis solicitudes" subtitle="Crea una solicitud, carga tus documentos PDF y envíala a revisión." actions={!creating && <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus size={15} /> Nueva solicitud</button>} />
+      <PageHeader kicker="MIS TRÁMITES" title="Mis solicitudes" subtitle="Crea tu solicitud, entrega los documentos al coordinador y consulta tu checklist de revisión presencial." actions={!creating && <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus size={15} /> Nueva solicitud</button>} />
       {creating && <NuevaSolicitud onCancel={() => setCreating(false)} />}
       <Panel title="Historial de solicitudes" actions={
         <select className="compact" value={estado} onChange={(e) => { setEstado(e.target.value); setPage(1) }} aria-label="Filtrar por estado">

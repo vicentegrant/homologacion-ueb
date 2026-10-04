@@ -11,7 +11,7 @@ use RuntimeException;
 
 class DocumentWorkflowTest extends StudentWorkflowTestCase
 {
-    public function test_pdf_upload_is_private_and_download_returns_the_original_content(): void
+    public function test_historical_pdf_is_private_and_download_returns_original_content(): void
     {
         $context = $this->scenario();
         $solicitud = $this->draft($context);
@@ -28,7 +28,7 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
             ->assertStreamedContent("%PDF-1.4\nnotas");
     }
 
-    public function test_replacement_removes_previous_file_after_persistence(): void
+    public function test_legacy_storage_service_replacement_preserves_file_integrity(): void
     {
         $context = $this->scenario();
         $solicitud = $this->draft($context);
@@ -54,10 +54,10 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
         $source = UploadedFile::fake()->createWithContent('false.pdf', 'not a pdf');
         $disguised = new UploadedFile($source->getPathname(), 'false.pdf', 'application/pdf', null, true);
         $this->post($url, ['archivo' => $disguised], ['Accept' => 'application/json'])
-            ->assertUnprocessable()->assertJsonValidationErrors('archivo');
+            ->assertStatus(410);
         $this->post($url, ['archivo' => UploadedFile::fake()->create('large.pdf', 10241, 'application/pdf')], ['Accept' => 'application/json'])
-            ->assertUnprocessable()->assertJsonValidationErrors('archivo');
-        $this->postJson($url, [])->assertUnprocessable()->assertJsonValidationErrors('archivo');
+            ->assertStatus(410);
+        $this->postJson($url, [])->assertStatus(410);
 
         $this->assertNull($document->fresh()->ruta_documento_oficio);
         $this->assertCount(0, Storage::disk('local')->allFiles());
@@ -73,32 +73,25 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
             $this->state($solicitud, $state);
             $this->post("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}", [
                 'archivo' => UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nnotas"),
-            ], ['Accept' => 'application/json'])->assertStatus(409);
+            ], ['Accept' => 'application/json'])->assertStatus(410);
         }
 
         $this->assertNull($document->fresh()->ruta_documento_oficio);
         $this->assertCount(0, Storage::disk('local')->allFiles());
     }
 
-    public function test_observed_documents_can_be_corrected_and_resubmitted_without_losing_observations(): void
+    public function test_presential_corrections_preserve_observations_without_student_resubmission(): void
     {
         $context = $this->scenario();
         $solicitud = $this->draft($context);
-        $this->upload($solicitud);
         $document = $solicitud->documentos()->firstOrFail();
-        $document->update(['estado_documento_id' => EstadoDocumento::query()->where('nombre', 'observado')->firstOrFail()->id]);
-        $observation = $document->observaciones()->create(['observacion' => 'Adjunte una copia legible.']);
-        $this->state($solicitud, 'observado');
-
-        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")->assertUnprocessable();
-        $this->upload($solicitud);
-        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")->assertOk()
-            ->assertJsonPath('data.estado_actual', 'en_revision')
-            ->assertJsonPath('data.documentos.0.estado', 'presentado')
-            ->assertJsonPath('data.documentos.0.observaciones.0.observacion', 'Adjunte una copia legible.');
-
-        $this->assertModelExists($observation);
-        $this->assertFalse($document->fresh()->validez);
+        $this->asUser($context['coordinator']);
+        $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'observado', 'observacion' => 'Adjunte una copia legible.'])->assertOk();
+        $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'presentado'])->assertOk();
+        $this->asUser($context['student']);
+        $this->getJson('/api/v1/student/solicitudes/'.$solicitud->id)->assertOk()->assertJsonPath('data.estado_actual', 'en_revision')->assertJsonPath('data.documentos.0.observaciones.0.observacion', 'Adjunte una copia legible.');
+        $this->postJson('/api/v1/student/solicitudes/'.$solicitud->id.'/enviar')->assertStatus(410);
+        $this->assertFalse($document->refresh()->validez);
     }
 
     public function test_approved_document_cannot_be_replaced_during_corrections(): void
@@ -113,7 +106,7 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
 
         $this->post("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}", [
             'archivo' => UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nnotas"),
-        ], ['Accept' => 'application/json'])->assertStatus(409);
+        ], ['Accept' => 'application/json'])->assertStatus(410);
 
         $this->assertSame($oldPath, $document->fresh()->ruta_documento_oficio);
         $this->assertTrue($document->fresh()->validez);
@@ -150,10 +143,10 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
 
         $this->getJson("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}/download")->assertNotFound();
         $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")
-            ->assertUnprocessable()->assertJsonValidationErrors('documentos');
+            ->assertStatus(410);
     }
 
-    public function test_database_failure_preserves_previous_file_and_removes_new_upload(): void
+    public function test_disabled_upload_endpoint_does_not_touch_database_or_historical_files(): void
     {
         $context = $this->scenario();
         $solicitud = $this->draft($context);
@@ -170,7 +163,7 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
         try {
             $this->post("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}", [
                 'archivo' => UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nreemplazo"),
-            ], ['Accept' => 'application/json'])->assertStatus(500);
+            ], ['Accept' => 'application/json'])->assertStatus(410);
         } finally {
             SolicitudDocumento::setEventDispatcher($originalDispatcher);
         }

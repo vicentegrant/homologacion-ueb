@@ -26,6 +26,7 @@ class UserIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'tipo_identificacion' => ['nullable', 'string', 'in:cedula,pasaporte'],
             'search' => ['nullable', 'string', 'max:255'],
             'rol' => ['nullable', 'string', 'max:255', Rule::exists('roles', 'nombre')],
             'cuenta_activa' => ['nullable', 'boolean'],

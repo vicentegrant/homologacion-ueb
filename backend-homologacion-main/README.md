@@ -127,7 +127,7 @@ Enviar siempre `Accept: application/json` y `Authorization: Bearer {token}` en r
 
 ## Verificación
 
-Las pruebas usan obligatoriamente `backend_homologacion_test` en PostgreSQL, separada de la base de desarrollo. Crear esa base con el usuario configurado como propietario antes de ejecutar la suite. Host, puerto, usuario y contraseña se leen de `.env` (o `.env.testing` si se utiliza); `phpunit.xml` fija el nombre de la base de pruebas y vacía `DB_URL` para evitar usar accidentalmente la base de trabajo. No contiene credenciales de una computadora particular.
+Las pruebas usan obligatoriamente `homologacion_ueb_test` en PostgreSQL, separada de la base de desarrollo. Crear esa base con el usuario configurado como propietario antes de ejecutar la suite. Host, puerto, usuario y contraseña se leen de `.env` (o `.env.testing` si se utiliza); `phpunit.xml` fija el nombre de la base de pruebas y vacía `DB_URL` para evitar usar accidentalmente la base de trabajo. No contiene credenciales de una computadora particular.
 
 ```sh
 php artisan test --compact

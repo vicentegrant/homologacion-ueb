@@ -48,7 +48,9 @@ class DocumentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $data['estado'] === 'aprobado' ? 'Documento aprobado correctamente.' : 'Documento observado correctamente.',
+            'message' => match ($data['estado']) {
+                'aprobado' => 'Documento validado.', 'presentado' => 'Recepción presencial registrada.', default => 'Observación registrada.'
+            },
             'data' => CoordinatorDocumentResource::make($document),
         ]);
     }

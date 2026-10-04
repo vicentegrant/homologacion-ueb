@@ -13,6 +13,8 @@ const TOKEN_KEY = 'ueb_token'
 export type UserRole = 'administrador' | 'coordinador' | 'estudiante'
 
 export type ApiUser = {
+  tipo_identificacion?: string;
+  must_change_password?: boolean;
   id: number
   nombres_completos: string
   cedula: string | null

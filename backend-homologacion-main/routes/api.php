@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\CareerController;
+use App\Http\Controllers\Api\Admin\CatalogManagementController;
 use App\Http\Controllers\Api\Admin\CoordinatorCareerController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\ReportController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Api\Coordinator\StudentController as CoordinatorStudent
 use App\Http\Controllers\Api\Coordinator\SubjectController as CoordinatorSubjectController;
 use App\Http\Controllers\Api\Coordinator\SyllabusTopicController as CoordinatorSyllabusTopicController;
 use App\Http\Controllers\Api\Coordinator\TechnicalReportController as CoordinatorTechnicalReportController;
+use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\Student\AcademicBackgroundController;
 use App\Http\Controllers\Api\Student\CatalogController;
 use App\Http\Controllers\Api\Student\DocumentController;
@@ -43,12 +45,15 @@ Route::get('/v1/health', function () {
 });
 
 Route::prefix('v1')->group(function (): void {
+    Route::post('/forgot-password', [PasswordController::class, 'forgot'])->middleware('throttle:5,1');
+    Route::post('/reset-password', [PasswordController::class, 'reset'])->middleware('throttle:5,1');
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
-    Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
-        Route::get('/me', [AuthController::class, 'me']);
-        Route::post('/logout', [AuthController::class, 'logout']);
+    Route::middleware(['auth:sanctum', 'active', 'password.changed'])->group(function (): void {
+        Route::get('/me', [AuthController::class, 'me'])->withoutMiddleware('password.changed');
+        Route::post('/logout', [AuthController::class, 'logout'])->withoutMiddleware('password.changed');
+        Route::post('/change-password', [PasswordController::class, 'change'])->withoutMiddleware('password.changed')->middleware('throttle:5,1');
         Route::get('/roles', [AuthController::class, 'roles'])->middleware('role:administrador');
 
         Route::prefix('student')->name('student.')->middleware('role:estudiante')->group(function (): void {
@@ -72,6 +77,11 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::prefix('admin')->name('admin.')->middleware('role:administrador')->group(function (): void {
+            Route::get('/catalogs', [CatalogManagementController::class, 'index']);
+            Route::get('/catalogs/{catalog}/{entry}', [CatalogManagementController::class, 'show'])->whereNumber('entry');
+            Route::post('/catalogs/{catalog}', [CatalogManagementController::class, 'store']);
+            Route::put('/catalogs/{catalog}/{entry}', [CatalogManagementController::class, 'update'])->whereNumber('entry');
+            Route::delete('/catalogs/{catalog}/{entry}', [CatalogManagementController::class, 'destroy'])->whereNumber('entry');
             Route::get('/users', [UserController::class, 'index'])->name('users.index');
             Route::post('/users', [UserController::class, 'store'])->name('users.store');
             Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
@@ -96,6 +106,10 @@ Route::prefix('v1')->group(function (): void {
 
         Route::prefix('coordinator')->name('coordinator.')->middleware('role:coordinador')->group(function (): void {
             Route::get('/catalogo', CoordinatorCatalogController::class)->name('catalogo');
+            Route::post('/students', [CoordinatorStudentController::class, 'store'])->middleware('throttle:20,1');
+            Route::put('/students/{student}', [CoordinatorStudentController::class, 'update'])->whereNumber('student');
+            Route::delete('/students/{student}', [CoordinatorStudentController::class, 'destroy'])->whereNumber('student');
+            Route::patch('/students/{student}/status', [CoordinatorStudentController::class, 'status'])->whereNumber('student');
             Route::get('/students', [CoordinatorStudentController::class, 'index'])->name('students.index');
             Route::get('/students/{student}', [CoordinatorStudentController::class, 'show'])->whereNumber('student')->name('students.show');
 

@@ -4,9 +4,11 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\TemporaryPasswordNotification;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class UserManagementTest extends TestCase
@@ -28,6 +30,7 @@ class UserManagementTest extends TestCase
 
     public function test_administrator_creates_a_user_atomically_with_creator_role_and_hashed_password(): void
     {
+        Notification::fake();
         $admin = $this->authenticateAs('Administrador');
         $role = Role::query()->where('nombre', 'coordinador')->firstOrFail();
 
@@ -38,7 +41,8 @@ class UserManagementTest extends TestCase
         $this->assertSame($admin->id, $created->creador_id);
         $this->assertTrue($created->cuenta_activa);
         $this->assertTrue($created->hasRole('Coordinador'));
-        $this->assertTrue(Hash::check('Password123!', $created->password));
+        Notification::assertSentTo($created, TemporaryPasswordNotification::class, fn ($notification): bool => Hash::check($notification->temporaryPassword, $created->password));
+        $this->assertTrue($created->must_change_password);
         $this->assertNotSame('Password123!', $created->password);
     }
 
@@ -67,7 +71,7 @@ class UserManagementTest extends TestCase
             ->assertJsonPath('meta.per_page', 1)->assertJsonPath('meta.total', 1);
     }
 
-    public function test_admin_updates_allowed_fields_and_only_changes_password_when_provided(): void
+    public function test_admin_updates_profile_and_role_but_cannot_choose_a_password(): void
     {
         $this->authenticateAs('Administrador');
         $user = User::factory()->create(['password' => 'OldPassword123!']);
@@ -82,8 +86,9 @@ class UserManagementTest extends TestCase
         $this->patchJson("/api/v1/admin/users/{$user->id}", [
             'password' => 'NewPassword123!',
             'rol_id' => $coordinatorRole->id,
-        ])->assertOk()->assertJsonPath('data.roles.0', 'coordinador');
-        $this->assertTrue(Hash::check('NewPassword123!', $user->refresh()->password));
+        ])->assertUnprocessable()->assertJsonValidationErrors('password');
+        $this->assertSame($originalPassword, $user->refresh()->password);
+        $this->patchJson("/api/v1/admin/users/{$user->id}", ['rol_id' => $coordinatorRole->id])->assertOk()->assertJsonPath('data.roles.0', 'coordinador');
     }
 
     public function test_admin_can_deactivate_and_reactivate_a_user_and_deactivation_revokes_tokens(): void
@@ -147,11 +152,11 @@ class UserManagementTest extends TestCase
     private function validPayload(array $overrides = []): array
     {
         return array_merge([
+            'tipo_identificacion' => 'cedula',
             'nombres_completos' => 'Usuario Nuevo',
             'cedula' => '0922222222',
             'email' => 'nuevo@example.com',
             'numero_celular' => '0992222222',
-            'password' => 'Password123!',
         ], $overrides);
     }
 }

@@ -23,6 +23,7 @@ class StudentIndexRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'tipo_identificacion' => ['nullable', 'string', 'in:cedula,pasaporte'],
             'search' => ['nullable', 'string', 'max:255'],
             'cuenta_activa' => ['nullable', 'boolean'],
             'carrera' => ['nullable', 'integer', 'exists:carreras,id'],

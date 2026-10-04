@@ -3,6 +3,7 @@
 use App\Models\User;
 
 return [
+    'temporary_password_hours' => (int) env('TEMPORARY_PASSWORD_HOURS', 24),
 
     /*
     |--------------------------------------------------------------------------

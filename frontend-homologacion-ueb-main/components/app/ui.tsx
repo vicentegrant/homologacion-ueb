@@ -96,7 +96,7 @@ export function Alert({ error, message, onRetry }: { error?: Error | null; messa
     const fields = error instanceof ApiError ? Object.values(error.errors).flat() : []
     return (
       <div className="api-alert" role="alert">
-        <span>{error.message}{fields.length > 1 && <small>{fields.join(' ')}</small>}</span>
+        <span>{error.message}{fields.length > 0 && <small>{fields.join(' ')}</small>}</span>
         {onRetry && <button onClick={onRetry}>Reintentar</button>}
       </div>
     )

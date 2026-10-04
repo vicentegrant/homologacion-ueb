@@ -34,8 +34,8 @@ class CatalogController extends Controller
     private function careers(User $coordinator): array
     {
         return $coordinator->carrerasCoordinadas()->orderBy('nombre')
-            ->get(['carreras.id', 'carreras.nombre'])
-            ->map(fn (Carrera $career): array => ['id' => $career->id, 'nombre' => $career->nombre])
+            ->with('modalidades')->get(['carreras.*'])
+            ->map(fn (Carrera $career): array => ['id' => $career->id, 'nombre' => $career->nombre, 'activa' => $career->activa, 'modalidades' => $career->modalidades->map(fn ($m): array => ['id' => $m->id, 'nombre' => $m->nombre, 'activa' => $m->activa])->all()])
             ->values()->all();
     }
 }

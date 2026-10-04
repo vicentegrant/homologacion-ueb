@@ -51,13 +51,12 @@ class SolicitudWorkflowService
 
     public function requirementsApproved(Solicitud $solicitud): bool
     {
-        $documents = $solicitud->documentos()->with(['estadoDocumento', 'verificaciones'])->get();
+        $documents = $solicitud->documentos()->where('obligatorio', true)->with(['estadoDocumento', 'verificaciones'])->get();
 
         return $documents->isNotEmpty() && $documents->every(function (SolicitudDocumento $document): bool {
             return $document->estadoDocumento->nombre === 'aprobado'
                 && $document->validez
-                && $document->ruta_documento_oficio !== null
-                && Storage::disk('local')->exists($document->ruta_documento_oficio)
+                && ($document->recibido_at !== null || ($document->ruta_documento_oficio !== null && Storage::disk('local')->exists($document->ruta_documento_oficio)))
                 && $document->verificaciones->isNotEmpty()
                 && $document->verificaciones->every(fn ($verification): bool => $verification->estado);
         });
@@ -78,18 +77,12 @@ class SolicitudWorkflowService
 
     private function assertConditions(Solicitud $solicitud, string $current, string $target): void
     {
-        if ($current === 'pendiente' && $target === 'en_revision') {
-            abort_unless($solicitud->estudiante->antecedentesAcademicos()->exists(), 409, 'El estudiante no ha registrado antecedentes académicos.');
-            abort_unless($this->documentsReadyForReview($solicitud), 409, 'La documentación requerida no está completa.');
-        }
-
         if ($target === 'observado') {
-            abort_unless($solicitud->documentos()->whereHas('estadoDocumento', fn ($query) => $query->where('nombre', 'observado'))->exists(), 409, 'No existen documentos observados.');
+            abort_unless($solicitud->documentos()->where('obligatorio', true)->whereHas('estadoDocumento', fn ($query) => $query->where('nombre', 'observado'))->exists(), 409, 'No existen documentos observados.');
         }
 
         if ($current === 'observado' && $target === 'en_revision') {
-            abort_if($solicitud->documentos()->whereHas('estadoDocumento', fn ($query) => $query->where('nombre', 'observado'))->exists(), 409, 'Aún existen documentos observados sin corregir.');
-            abort_unless($this->documentsReadyForReview($solicitud), 409, 'La documentación corregida no está completa.');
+            abort_if($solicitud->documentos()->where('obligatorio', true)->whereHas('estadoDocumento', fn ($query) => $query->where('nombre', 'observado'))->exists(), 409, 'Aún existen documentos observados sin corregir.');
         }
 
         if ($target === 'en_proceso') {

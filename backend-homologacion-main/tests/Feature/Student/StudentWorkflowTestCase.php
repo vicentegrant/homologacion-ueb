@@ -9,6 +9,7 @@ use App\Models\EstadoSolicitud;
 use App\Models\Solicitud;
 use App\Models\TramiteProceso;
 use App\Models\User;
+use App\Services\StudentDocumentService;
 use App\Services\StudentSolicitudService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -76,8 +77,6 @@ abstract class StudentWorkflowTestCase extends TestCase
     protected function upload(Solicitud $solicitud): void
     {
         $document = $solicitud->documentos()->firstOrFail();
-        $this->post("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}", [
-            'archivo' => UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nnotas"),
-        ], ['Accept' => 'application/json'])->assertOk();
+        app(StudentDocumentService::class)->store($solicitud->estudiante, $solicitud->id, $document->id, UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nnotas"));
     }
 }

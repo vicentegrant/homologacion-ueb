@@ -3,9 +3,6 @@
 namespace App\Http\Controllers\Api\Student;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\Student\StoreDocumentRequest;
-use App\Http\Resources\Api\StudentDocumentResource;
-use App\Services\StudentDocumentService;
 use App\Services\StudentSolicitudService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,11 +11,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController extends Controller
 {
-    public function store(StoreDocumentRequest $request, int $solicitud, int $documento, StudentDocumentService $service): JsonResponse
+    public function store(Request $request, int $solicitud, int $documento, StudentSolicitudService $service): JsonResponse
     {
-        $document = $service->store($request->user(), $solicitud, $documento, $request->file('archivo'));
-
-        return response()->json(['success' => true, 'data' => StudentDocumentResource::make($document)]);
+        $service->owned($request->user(), $solicitud)->documentos()->findOrFail($documento);
+        abort(410, 'La entrega es presencial. El coordinador registra y valida los documentos.');
     }
 
     public function download(Request $request, int $solicitud, int $documento, StudentSolicitudService $service): StreamedResponse

@@ -19,6 +19,7 @@ class UserResource extends JsonResource
         return [
             'id' => $this->resource->getKey(),
             'nombres_completos' => $this->resource->nombres_completos,
+            'tipo_identificacion' => $this->resource->tipo_identificacion,
             'cedula' => $this->resource->cedula,
             'email' => $this->resource->email,
             'numero_celular' => $this->resource->numero_celular,

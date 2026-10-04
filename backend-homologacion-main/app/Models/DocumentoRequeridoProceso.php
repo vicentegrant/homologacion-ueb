@@ -7,9 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['tramite_proceso_id', 'carrera_id', 'nombre_documento', 'descripcion', 'ruta_ejemplo'])]
+#[Fillable(['tramite_proceso_id', 'carrera_id', 'nombre_documento', 'descripcion', 'ruta_ejemplo', 'activo', 'obligatorio'])]
 class DocumentoRequeridoProceso extends Model
 {
+    protected function casts(): array
+    {
+        return ['activo' => 'boolean', 'obligatorio' => 'boolean'];
+    }
+
     protected $table = 'documentos_requeridos_proceso';
 
     /** @return BelongsTo<TramiteProceso, $this> */

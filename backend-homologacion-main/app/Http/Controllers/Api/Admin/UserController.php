@@ -25,6 +25,7 @@ class UserController extends Controller
         $filters = $request->validated();
         $users = User::query()
             ->with(['roles', 'creador', 'carrerasCoordinadas'])
+            ->when($filters['tipo_identificacion'] ?? null, fn (Builder $q, string $type) => $q->where('tipo_identificacion', $type))
             ->when($filters['search'] ?? null, function (Builder $query, string $search): void {
                 $query->where(function (Builder $searchQuery) use ($search): void {
                     $searchQuery->where('nombres_completos', 'like', "%{$search}%")

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Coordinator;
 
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 class CoordinatorReviewRegressionTest extends CoordinatorWorkflowTestCase
@@ -28,33 +27,26 @@ class CoordinatorReviewRegressionTest extends CoordinatorWorkflowTestCase
     {
         $context = $this->scenario();
         $document = $context['solicitud']->documentos()->firstOrFail();
-        $context['student']->antecedentesAcademicos()->create([
-            'universidad_origen' => 'Universidad', 'carrera_origen' => 'Sistemas',
-            'tipo_institucion' => 'publica', 'periodo_cursado' => '2025',
-        ]);
-        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertOk();
-        $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'observado', 'observacion' => 'Corregir archivo.'])->assertOk();
-        $this->asUser($context['student']);
-        $this->post('/api/v1/student/solicitudes/'.$context['solicitud']->id.'/documentos/'.$document->id, [
-            'archivo' => UploadedFile::fake()->createWithContent('nuevo.pdf', "%PDF-1.4\nnuevo"),
-        ], ['Accept' => 'application/json'])->assertOk();
-        $this->postJson('/api/v1/student/solicitudes/'.$context['solicitud']->id.'/enviar')->assertOk();
-        $this->asUser($context['coordinator']);
-        $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'aprobado'])->assertOk();
-
-        $this->assertSame('en_revision', $context['solicitud']->fresh()->ultimoHistorialEstado->estadoSolicitud->nombre);
+        $url = '/api/v1/coordinator/documents/'.$document->id.'/review';
+        $document->verificaciones()->create(['coordinador_id' => $context['coordinator']->id, 'estado' => true]);
+        $this->patchJson($url, ['estado' => 'observado', 'observacion' => 'Falta una firma.'])->assertOk();
         $this->assertSame(0, $document->verificaciones()->count());
-        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertOk();
+        $this->patchJson($url, ['estado' => 'aprobado'])->assertStatus(409);
+        $this->patchJson($url, ['estado' => 'presentado'])->assertOk();
+        $this->assertSame(0, $document->verificaciones()->count());
+        $this->assertSame('en_revision', $context['solicitud']->fresh()->ultimoHistorialEstado->estadoSolicitud->nombre);
+        $this->patchJson($url, ['estado' => 'aprobado'])->assertOk();
+        $this->assertSame(1, $document->verificaciones()->count());
         $this->assertSame('en_proceso', $context['solicitud']->fresh()->ultimoHistorialEstado->estadoSolicitud->nombre);
     }
 
-    public function test_returns_409_when_verifying_a_document_without_a_stored_file(): void
+    public function test_separate_digital_verification_endpoint_is_retired(): void
     {
         $context = $this->scenario();
         $document = $context['solicitud']->documentos()->firstOrFail();
         Storage::disk('local')->delete($document->ruta_documento_oficio);
 
-        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertStatus(409);
+        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertStatus(410);
 
         $this->assertSame(0, $document->verificaciones()->count());
     }
@@ -65,7 +57,7 @@ class CoordinatorReviewRegressionTest extends CoordinatorWorkflowTestCase
         $document = $context['solicitud']->documentos()->firstOrFail();
 
         $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'observado', 'observacion' => 'Fuera de etapa.'])->assertStatus(409);
-        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertStatus(409);
+        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertStatus(410);
 
         $this->assertSame('presentado', $document->fresh()->estadoDocumento->nombre);
         $this->assertSame(0, $document->observaciones()->count());

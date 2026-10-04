@@ -20,6 +20,7 @@ class StudentResource extends JsonResource
         return [
             'id' => $this->resource->getKey(),
             'nombres_completos' => $this->resource->nombres_completos,
+            'tipo_identificacion' => $this->resource->tipo_identificacion,
             'cedula' => $this->resource->cedula,
             'email' => $this->resource->email,
             'numero_celular' => $this->resource->numero_celular,
@@ -27,6 +28,8 @@ class StudentResource extends JsonResource
             'antecedentes_academicos' => $this->whenLoaded('antecedentesAcademicos'),
             'carreras' => $this->whenLoaded('carrerasComoEstudiante', fn () => $this->resource->carrerasComoEstudiante->map(fn (EstudianteCarrera $assignment): array => [
                 'id' => $assignment->coordinadorCarrera?->carrera?->getKey(),
+                'modalidad_id' => $assignment->modalidad_id,
+                'modalidad' => $assignment->modalidad?->nombre,
                 'nombre' => $assignment->coordinadorCarrera?->carrera?->nombre,
                 'coordinador' => $assignment->coordinadorCarrera?->coordinador === null ? null : [
                     'id' => $assignment->coordinadorCarrera->coordinador->getKey(),

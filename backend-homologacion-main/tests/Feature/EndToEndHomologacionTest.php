@@ -9,10 +9,12 @@ use App\Models\Role;
 use App\Models\Solicitud;
 use App\Models\TramiteProceso;
 use App\Models\User;
+use App\Notifications\TemporaryPasswordNotification;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -23,6 +25,7 @@ class EndToEndHomologacionTest extends TestCase
     public function test_complete_http_flow_from_administration_to_student_and_coordinator(): void
     {
         Storage::fake('local');
+        Notification::fake();
         $this->seed(DatabaseSeeder::class);
         $admin = User::factory()->create();
         $admin->assignRole('administrador');
@@ -59,16 +62,10 @@ class EndToEndHomologacionTest extends TestCase
         ])->assertCreated();
         $solicitudId = $requestResponse->json('data.id');
         $documentId = $requestResponse->json('data.documentos.0.id');
-        $this->post("/api/v1/student/solicitudes/{$solicitudId}/documentos/{$documentId}", [
-            'archivo' => UploadedFile::fake()->createWithContent('certificado.pdf', "%PDF-1.4\ncertificado"),
-        ], ['Accept' => 'application/json'])->assertOk();
-        $this->postJson("/api/v1/student/solicitudes/{$solicitudId}/enviar")
-            ->assertOk()->assertJsonPath('data.estado_actual', 'en_revision');
-
         $coordinator = User::query()->findOrFail($coordinatorId);
         $this->asUser($coordinator);
+        $this->patchJson("/api/v1/coordinator/documents/{$documentId}/review", ['estado' => 'presentado'])->assertOk();
         $this->patchJson("/api/v1/coordinator/documents/{$documentId}/review", ['estado' => 'aprobado'])->assertOk();
-        $this->postJson("/api/v1/coordinator/documents/{$documentId}/verification", ['estado' => true])->assertOk();
         $originCurriculumId = $this->postJson('/api/v1/coordinator/curricula', [
             'nombre' => 'Malla de origen integral', 'tipo' => 'origen',
             'carrera_id' => $career->id, 'estudiante_id' => $studentId,
@@ -109,9 +106,9 @@ class EndToEndHomologacionTest extends TestCase
     private function userPayload(string $role, array $overrides): array
     {
         return [
+            'tipo_identificacion' => 'cedula',
             'nombres_completos' => 'Usuario Integral', 'cedula' => '0900000199',
             'email' => 'usuario.integral@example.com', 'numero_celular' => '0990000101',
-            'password' => 'Password123!',
             'rol_id' => Role::query()->where('nombre', $role)->firstOrFail()->id,
             ...$overrides,
         ];
@@ -129,6 +126,16 @@ class EndToEndHomologacionTest extends TestCase
     private function asUser(User $user): void
     {
         Auth::forgetGuards();
+        if ($user->fresh()->must_change_password) {
+            $password = null;
+            Notification::assertSentTo($user, TemporaryPasswordNotification::class, function ($notification) use (&$password): bool {
+                $password = $notification->temporaryPassword;
+
+                return true;
+            });
+            $this->withToken($user->createToken('activation')->plainTextToken)->postJson('/api/v1/change-password', ['current_password' => $password, 'password' => 'Permanent123456', 'password_confirmation' => 'Permanent123456'])->assertOk();
+            Auth::forgetGuards();
+        }
         $this->withToken($user->createToken('test')->plainTextToken);
     }
 }

@@ -45,6 +45,8 @@ class StudentSolicitudService
                 ->where('coordinador_carrera_id', $data['coordinador_carrera_id'])->firstOrFail();
             $assignment = $enrollment->coordinadorCarrera()->lockForUpdate()->firstOrFail();
             $coordinator = $assignment->coordinador;
+            abort_unless($assignment->carrera->activa && (! $assignment->carrera->facultad_id || $assignment->carrera->facultad->activa), 409, 'La carrera no está disponible.');
+            abort_if($enrollment->modalidad_id && ! $enrollment->modalidad->activa, 409, 'La modalidad está inactiva.');
             abort_unless($coordinator?->cuenta_activa && $coordinator->hasRole('coordinador'), 409, 'La carrera no tiene un coordinador activo.');
 
             $existing = $student->solicitudesComoEstudiante()->where('carrera_id', $assignment->carrera_id)
@@ -53,9 +55,9 @@ class StudentSolicitudService
                 ->exists();
             abort_if($existing, 409, 'Ya tiene una solicitud activa para esta carrera y trámite.');
 
-            $requirements = DocumentoRequeridoProceso::query()->where('tramite_proceso_id', $data['tramite_proceso_id'])
+            $requirements = DocumentoRequeridoProceso::query()->where('activo', true)->where('tramite_proceso_id', $data['tramite_proceso_id'])
                 ->where(fn (Builder $query): Builder => $query->whereNull('carrera_id')->orWhere('carrera_id', $assignment->carrera_id))->get();
-            abort_if($requirements->isEmpty(), 409, 'No hay documentos requeridos configurados para esta carrera y trámite.');
+            abort_if($requirements->isEmpty() || ! $requirements->contains('obligatorio', true), 409, 'No hay documentos requeridos configurados para esta carrera y trámite.');
 
             $solicitud = $student->solicitudesComoEstudiante()->create([
                 'coordinador_id' => $coordinator->id, 'carrera_id' => $assignment->carrera_id,
@@ -65,6 +67,7 @@ class StudentSolicitudService
             foreach ($requirements as $requirement) {
                 $solicitud->documentos()->create([
                     'documento_requerido_proceso_id' => $requirement->id,
+                    'obligatorio' => $requirement->obligatorio, 'requisito_nombre' => $requirement->nombre_documento, 'requisito_descripcion' => $requirement->descripcion,
                     'estado_documento_id' => $pendingDocument->id,
                 ]);
             }

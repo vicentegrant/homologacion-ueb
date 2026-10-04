@@ -78,6 +78,7 @@ abstract class CoordinatorWorkflowTestCase extends TestCase
         $document = $solicitud->documentos()->create([
             'documento_requerido_proceso_id' => $requirement->id,
             'estado_documento_id' => EstadoDocumento::query()->where('nombre', 'presentado')->firstOrFail()->id,
+            'recibido_at' => now(), 'recibido_por_id' => $coordinator->id,
             'ruta_documento_oficio' => 'solicitudes/'.$solicitud->id.'/documento.pdf',
         ]);
         Storage::disk('local')->put($document->ruta_documento_oficio, "%PDF-1.4\ncontenido");

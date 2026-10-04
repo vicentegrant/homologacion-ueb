@@ -1,5 +1,8 @@
 'use client'
 
+import { AdminCatalogos } from '@/views/admin/catalogos'
+import { CoordinatorStudents } from '@/views/coordinator/estudiantes'
+import { PasswordView } from '@/views/password'
 import { FormEvent, useEffect, useState } from 'react'
 import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { ApiUser, getCurrentUser, getToken, loginRequest, logoutRequest, onUnauthorized, primaryRole, UserRole } from '@/lib/api'
@@ -22,7 +25,7 @@ import { AdminSolicitudDetalle } from '@/views/admin/solicitud-detalle'
 // Login
 // ---------------------------------------------------------------------------
 
-function LoginView({ onLogin, notice }: { onLogin: (user: ApiUser) => void; notice?: string }) {
+function LoginView({ onLogin, notice, onRecover }: { onLogin: (user: ApiUser) => void; notice?: string; onRecover: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
@@ -68,7 +71,7 @@ function LoginView({ onLogin, notice }: { onLogin: (user: ApiUser) => void; noti
           <form onSubmit={handleSubmit}>
             <label>Correo institucional<input type="email" placeholder="nombre@ueb.edu.ec" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required /></label>
             <label>Contraseña<div className="password-field"><input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /><button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)}>{showPassword ? 'Ocultar' : 'Mostrar'}</button></div></label>
-            <div className="form-row"><label className="remember"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> <span>Recordarme</span></label><span className="forgot-hint" title="Las cuentas las gestiona el Administrador">¿Olvidaste tu contraseña? Contacta al Administrador</span></div>
+            <div className="form-row"><label className="remember"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> <span>Recordarme</span></label><button type="button" className="link-button" onClick={onRecover}>¿Olvidaste tu contraseña?</button></div>
             {error && <p className="form-error" role="alert">{error}</p>}<button className="primary-button" type="submit" disabled={loading}>{loading ? 'Validando...' : 'Ingresar al sistema'} {!loading && <ArrowRight size={17} />}</button>
           </form>
           <div className="login-note"><ShieldCheck size={15} /> Tus datos están protegidos por la infraestructura institucional.</div>
@@ -101,11 +104,12 @@ function RoleRoutes({ user, role, segments }: { user: ApiUser; role: UserRole; s
 
   if (role === 'coordinador') {
     if (section === 'solicitudes') return Number.isFinite(id) ? <CoordinatorSolicitudDetalle id={id} /> : <SolicitudesList base="/coordinator" careers={user.carreras_coordinadas} />
-    if (section === 'estudiantes') return <EstudiantesList base="/coordinator" />
+    if (section === 'estudiantes') return <CoordinatorStudents />
     if (section === 'mallas') return Number.isFinite(id) ? <MallaDetalle id={id} /> : <MallasList />
   }
 
   if (role === 'administrador') {
+    if (section === 'catalogos') return <AdminCatalogos />
     if (section === 'usuarios') return <AdminUsuarios me={user} />
     if (section === 'solicitudes') return Number.isFinite(id) ? <AdminSolicitudDetalle id={id} /> : <SolicitudesList base="/admin" />
     if (section === 'estudiantes') return <EstudiantesList base="/admin" />
@@ -143,8 +147,10 @@ export default function Page() {
   const [user, setUser] = useState<ApiUser | null>(null)
   const [checking, setChecking] = useState(true)
   const [notice, setNotice] = useState('')
+  const [passwordMode, setPasswordMode] = useState<'forgot' | 'reset' | null>(null)
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('reset_token')) setPasswordMode('reset')
     onUnauthorized(() => {
       setUser(null)
       setNotice('Tu sesión expiró o fue cerrada. Inicia sesión nuevamente.')
@@ -165,6 +171,8 @@ export default function Page() {
     setNotice('')
     setUser(null)
     window.location.hash = ''
+    window.history.replaceState({}, '', window.location.pathname)
+    setPasswordMode(null)
   }
 
   function handleLogin(loggedUser: ApiUser) {
@@ -174,6 +182,8 @@ export default function Page() {
   }
 
   if (checking) return <main className="session-loading"><BrandMark /><p>Verificando sesión...</p></main>
-  if (!user) return <LoginView notice={notice} onLogin={handleLogin} />
+  if (passwordMode) return <PasswordView mode={passwordMode} onDone={handleLogout} />
+  if (user?.must_change_password) return <PasswordView mode="change" onDone={handleLogout} />
+  if (!user) return <LoginView notice={notice} onLogin={handleLogin} onRecover={() => setPasswordMode('forgot')} />
   return <AuthenticatedApp key={user.id} user={user} onLogout={handleLogout} />
 }

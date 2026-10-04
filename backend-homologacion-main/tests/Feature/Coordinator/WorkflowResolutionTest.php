@@ -27,7 +27,7 @@ class WorkflowResolutionTest extends CoordinatorWorkflowTestCase
         $context = $this->scenario();
         $document = $context['solicitud']->documentos()->firstOrFail();
         $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'aprobado'])->assertOk();
-        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertOk();
+        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertStatus(410);
         [$origin, $destination] = $this->subjects($context);
         $this->postJson('/api/v1/coordinator/solicitudes/'.$context['solicitud']->id.'/comparisons', [
             'asignatura_origen_id' => $origin->id, 'asignatura_destino_id' => $destination->id,
@@ -69,7 +69,7 @@ class WorkflowResolutionTest extends CoordinatorWorkflowTestCase
         $context = $this->scenario();
         $document = $context['solicitud']->documentos()->firstOrFail();
         $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'aprobado'])->assertOk();
-        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertOk();
+        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertStatus(410);
         [$origin, $destination] = $this->subjects($context);
         $this->postJson('/api/v1/coordinator/solicitudes/'.$context['solicitud']->id.'/comparisons', [
             'asignatura_origen_id' => $origin->id, 'asignatura_destino_id' => $destination->id,
@@ -92,7 +92,7 @@ class WorkflowResolutionTest extends CoordinatorWorkflowTestCase
         $context = $this->scenario();
         $document = $context['solicitud']->documentos()->firstOrFail();
         $this->patchJson('/api/v1/coordinator/documents/'.$document->id.'/review', ['estado' => 'aprobado'])->assertOk();
-        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertOk();
+        $this->postJson('/api/v1/coordinator/documents/'.$document->id.'/verification', ['estado' => true])->assertStatus(410);
         [$origin, $destination] = $this->subjects($context);
         $this->postJson('/api/v1/coordinator/solicitudes/'.$context['solicitud']->id.'/comparisons', [
             'asignatura_origen_id' => $origin->id,

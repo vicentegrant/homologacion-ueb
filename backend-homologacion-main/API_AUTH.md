@@ -1,3 +1,3 @@
 # Autenticación y autorización
 
-La referencia vigente está en [docs/api.md](docs/api.md). La API usa Laravel Sanctum con tokens Bearer, roles de Spatie y el middleware de cuenta activa. Los roles persistidos actualmente son `Administrador`, `Coordinador` y `Estudiante` y distinguen mayúsculas.
+La referencia vigente está en [docs/api.md](docs/api.md), incluyendo contraseña temporal, cambio obligatorio y recuperación. La API usa Laravel Sanctum con tokens Bearer, roles propios (`administrador`, `coordinador`, `estudiante`), comprobación de cuenta activa y bloqueo hasta cambiar la contraseña temporal.

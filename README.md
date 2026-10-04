@@ -15,7 +15,7 @@ El frontend se comunica con el backend por HTTP (`/api/v1`) usando tokens Bearer
 
 Instalar antes de empezar:
 
-- **PHP 8.3 o superior** con las extensiones `pdo_pgsql` y `pgsql` activadas en `php.ini`
+- **PHP 8.5** con las extensiones `pdo_pgsql` y `pgsql` activadas en `php.ini`
 - **Composer**
 - **PostgreSQL** (y conocer la contraseña del usuario `postgres`)
 - **Node.js 20 o superior** (incluye `npm`)
@@ -91,7 +91,7 @@ INITIAL_ADMIN_PHONE=0990000000
 php artisan config:clear
 php artisan migrate --seed
 php artisan db:seed --class=AdminUserSeeder
-php artisan db:seed --class=StudentDemoSeeder
+php artisan db:seed --class=PresentialDemoSeeder
 ```
 
 `StudentDemoSeeder` crea datos de prueba (estudiante, coordinador y una carrera `[DEMO]`). Solo funciona en entorno local.
@@ -140,29 +140,27 @@ Para apagar, presionar `Ctrl + C` en cada terminal. Las siguientes veces solo se
 
 ---
 
-## 6. Cuentas de prueba
+## 6. Cuentas de prueba locales
 
-| Rol | Correo | Contraseña |
+Después de ejecutar `php artisan db:seed --class=PresentialDemoSeeder`:
+
+| Rol | Correo | Contraseña inicial |
 | --- | --- | --- |
-| Administrador | El definido en `INITIAL_ADMIN_EMAIL` | El definido en `INITIAL_ADMIN_PASSWORD` |
-| Estudiante | `test@example.com` | `password` |
-| Coordinador | `coordinador-demo@example.com` | Asignarla primero (ver abajo) |
+| Administrador | `administrador.demo@example.test` | `DemoUeb2026!` |
+| Coordinador | `coordinador.demo@example.test` | `DemoUeb2026!` |
+| Estudiante | `estudiante.demo@example.test` | `DemoUeb2026!` |
 
-El coordinador de demostración se crea con una contraseña aleatoria. Para usarlo, iniciar sesión como Administrador, ir a **Usuarios**, editar a "Coordinador de demostración" y escribir una nueva contraseña.
-
-> Estas cuentas son solo para desarrollo. No usar en producción.
-
----
+El seeder está restringido a local/testing, es repetible y no reemplaza contraseñas existentes. Estas cuentas son solo de demostración. Las cuentas nuevas creadas desde la interfaz reciben una contraseña temporal aleatoria y deben cambiarla al ingresar. `MAIL_MAILER=log` registra los correos en `storage/logs/laravel.log`; configurar SMTP para envío real.
 
 ## 7. Flujo de prueba sugerido
 
-1. **Estudiante:** en *Mi perfil* registrar un antecedente académico; en *Mis solicitudes* crear una solicitud, subir los PDF requeridos y enviarla a revisión.
-2. **Coordinador:** en *Solicitudes* abrir la solicitud, aprobar y verificar cada documento, y avanzarla a *Análisis académico*.
-3. **Coordinador:** en *Mallas curriculares* crear la malla institucional de la carrera y la malla de origen del estudiante, con sus asignaturas; luego registrar comparaciones, el resultado y el informe técnico.
-4. **Coordinador o Administrador:** avanzar a *En Consejo* y registrar la resolución (PDF).
-5. **Estudiante:** descargar la resolución final.
+1. Administrador: abrir **Catálogos académicos** para gestionar facultades, carreras, modalidades y requisitos. Asignar carreras al coordinador desde **Usuarios**.
+2. Coordinador: abrir **Estudiantes** para registrar una cuenta, elegir cédula/pasaporte y asignar carrera y modalidad de destino.
+3. Estudiante: abrir **Mis solicitudes** y consultar el expediente de demostración, su barra de avance y la observación. Los documentos se entregan presencialmente; no hay subida de PDF.
+4. Coordinador: abrir ese expediente, **Registrar entrega**, **Validar documento** u **Observar** indicando el motivo. Para una observación, usar **Recibir corrección** y después validar.
+5. Al completar los obligatorios, el expediente pasa automáticamente a análisis académico. Seguir con mallas, comparaciones, resultado e informe técnico, Consejo y resolución. El 100 % documental no aprueba la homologación.
 
----
+Los cambios de catálogos no modifican requisitos de expedientes existentes. Los registros usados no se eliminan: se desactivan. Los archivos históricos, informes y resoluciones conservan descarga privada.
 
 ## 8. Problemas comunes
 
@@ -197,3 +195,17 @@ git push
 ```
 
 Nunca se suben: `.env`, `.env.local`, `vendor/`, `node_modules/` ni `.next/` (ya están excluidos en los `.gitignore`).
+
+## Comprobaciones de desarrollo
+
+Crear una base PostgreSQL exclusiva `homologacion_ueb_test` con permisos para el usuario de `.env`; PHPUnit usa esa base y nunca debe apuntar a la base local con datos.
+
+```powershell
+# Desde backend-homologacion-main
+php artisan test --compact
+php vendor/bin/pint --dirty --format agent
+php artisan scramble:export --path=docs/openapi.json --fail-on-unknown
+# Desde frontend-homologacion-ueb-main
+node node_modules/typescript/bin/tsc --noEmit
+npm run build
+```

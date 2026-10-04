@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests\Api\Admin;
 
+use App\Rules\IdentificationNumber;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class UpdateAdminUserRequest extends FormRequest
 {
@@ -28,10 +28,11 @@ class UpdateAdminUserRequest extends FormRequest
 
         return [
             'nombres_completos' => ['sometimes', 'required', 'string', 'max:255'],
-            'cedula' => ['sometimes', 'required', 'string', 'between:10,20', Rule::unique('users', 'cedula')->ignore($userId)],
+            'tipo_identificacion' => ['sometimes', 'string', 'in:cedula,pasaporte'],
+            'cedula' => ['required_with:tipo_identificacion', 'string', new IdentificationNumber($this->input('tipo_identificacion', $this->route('user')?->tipo_identificacion ?? 'cedula')), Rule::unique('users', 'cedula')->ignore($userId)],
             'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'numero_celular' => ['sometimes', 'required', 'string', 'between:7,20'],
-            'password' => ['sometimes', 'required', 'string', Password::defaults()],
+            'password' => ['prohibited', 'string'],
             'rol_id' => ['sometimes', 'required', 'integer', Rule::exists('roles', 'id')],
         ];
     }

@@ -96,17 +96,17 @@ class SolicitudWorkflowTest extends StudentWorkflowTestCase
         $this->assertSame('Corregida', $solicitud->fresh()->procedencia_estudios);
     }
 
-    public function test_submission_requires_documents_and_academic_background(): void
+    public function test_student_submission_endpoint_is_retired_regardless_of_background_or_files(): void
     {
         $context = $this->scenario();
         $solicitud = $this->draft($context);
 
         $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")
-            ->assertUnprocessable()->assertJsonValidationErrors('documentos');
+            ->assertStatus(410);
         $this->upload($solicitud);
         $context['student']->antecedentesAcademicos()->delete();
         $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")
-            ->assertUnprocessable()->assertJsonValidationErrors('antecedentes');
+            ->assertStatus(410);
 
         $this->assertDatabaseCount('historial_estados_solicitud', 1);
     }
@@ -115,13 +115,14 @@ class SolicitudWorkflowTest extends StudentWorkflowTestCase
     {
         $context = $this->scenario();
         $solicitud = $this->draft($context);
-        $this->upload($solicitud);
-
-        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")
-            ->assertOk()->assertJsonPath('data.estado_actual', 'en_revision')->assertJsonCount(2, 'data.historial_estados');
-        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")->assertStatus(409);
-
+        $document = $solicitud->documentos()->firstOrFail();
+        $this->asUser($context['coordinator']);
+        $url = '/api/v1/coordinator/documents/'.$document->id.'/review';
+        $this->patchJson($url, ['estado' => 'presentado'])->assertOk();
+        $this->patchJson($url, ['estado' => 'presentado'])->assertOk();
+        $this->assertSame('en_revision', $solicitud->refresh()->ultimoHistorialEstado->estadoSolicitud->nombre);
         $this->assertDatabaseCount('historial_estados_solicitud', 2);
+        $this->assertDatabaseCount('historial_documentos', 1);
     }
 
     public function test_listing_and_filters_only_expose_own_requests(): void
@@ -163,7 +164,7 @@ class SolicitudWorkflowTest extends StudentWorkflowTestCase
         ]);
         $this->upload($solicitud);
 
-        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")
+        $this->getJson("/api/v1/student/solicitudes/{$solicitud->id}")
             ->assertOk()->assertJsonCount(1, 'data.documentos');
     }
 
@@ -174,7 +175,7 @@ class SolicitudWorkflowTest extends StudentWorkflowTestCase
         $this->upload($solicitud);
         $context['coordinator']->update(['cuenta_activa' => false]);
 
-        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")->assertStatus(409);
+        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/enviar")->assertStatus(410);
 
         $this->assertDatabaseCount('historial_estados_solicitud', 1);
     }

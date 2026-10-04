@@ -10,9 +10,9 @@ export const estadoLabels: Record<string, string> = {
 }
 
 export const docEstadoLabels: Record<string, string> = {
-  pendiente: 'Sin cargar',
-  presentado: 'Presentado',
-  aprobado: 'Aprobado',
+  pendiente: 'Pendiente de entrega',
+  presentado: 'Recibido',
+  aprobado: 'Validado',
   observado: 'Observado',
 }
 

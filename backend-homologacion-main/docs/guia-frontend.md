@@ -1,169 +1,93 @@
 # Guía de integración para Frontend
 
-Esta guía permite comenzar a consumir la API de homologación. El inventario completo de rutas, campos y validaciones está en [Contrato de la API](api.md). Backend y Frontend deben usar los documentos de la misma revisión de `main`.
+El proyecto incluye Laravel 13 y Next.js 16. La referencia generada está en [openapi.json](openapi.json) y el contrato general en [api.md](api.md). Usar backend y frontend de la misma revisión.
 
-También está disponible [OpenAPI en JSON](openapi.json), generado con Scramble y sin tipos desconocidos. Puede importarse en Postman u otra herramienta compatible. El servidor incluido es un ejemplo local: reemplazarlo por el backend acordado. La autenticación Bearer se configura con el token recibido al iniciar sesión. Para regenerarlo después de cambiar endpoints: `php artisan scramble:export --path=docs/openapi.json --fail-on-unknown`.
+## Conexión local
 
-## Qué integrar primero
+Backend: PostgreSQL, `composer install`, `.env` propio, `php artisan key:generate` solo en instalaciones nuevas, `php artisan migrate --seed`. Para la demostración ejecutar `php artisan db:seed --class=PresentialDemoSeeder` (solo local/testing). Conservar `.env` y `APP_KEY` al actualizar; no ejecutar `migrate:fresh` sobre datos que se quieran guardar.
 
-| Orden | Funcionalidad | Estado para integración |
-| --- | --- | --- |
-| 1 | Login, sesión, logout y pantallas por rol | Implementado; comenzar aquí. |
-| 2 | Perfil del estudiante, antecedentes y catálogos | Implementado. El estudiante solo edita su celular. |
-| 3 | Crear/listar solicitudes, cargar PDF y enviar a revisión | Implementado; requiere cuentas, asignaciones y requisitos de prueba preparados por Backend. |
-| 4 | Consultas del coordinador, mallas, asignaturas y comparaciones | Implementado; probar con carreras autorizadas. |
-| 5 | Ciclo de observaciones/correcciones e informe final | Corregido y cubierto por pruebas de regresión; disponible para integración. |
+Frontend: `npm ci`; `.env.local` con `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api/v1`. Backend `.env`: `FRONTEND_URL=http://localhost:3000,http://127.0.0.1:3000`. Luego `php artisan config:clear`, `php artisan serve --host=127.0.0.1 --port=8000` y, en otra terminal del frontend, `npm run dev`. El frontend nunca se conecta directamente a PostgreSQL.
 
-La suite automatizada comprueba el recorrido Administrador → Estudiante → Coordinador → Estudiante sobre PostgreSQL, además de autorización, archivos y casos de error. La integración visual y la aceptación conjunta con Frontend se realizan sobre la interfaz que construya ese equipo.
+Las peticiones JSON usan `Accept: application/json`, `Content-Type: application/json` y `Authorization: Bearer <token>`. El cliente compartido está en `lib/api.ts`. 401: limpiar token y volver al login; 403: revisar rol o cambio obligatorio; 404: recurso inexistente o fuera de alcance; 409: conflicto de estado/referencias; 422: mostrar `errors` junto al formulario.
 
-### Comportamiento acordado y correcciones incluidas
+## Recorrido para probar
 
-- Se pueden revisar varios documentos durante `en_revision` y `observado`. Solo el primer paso a `observado` agrega esa transición al historial; cada observación documental conserva su propio registro.
-- Observar o reemplazar un archivo elimina sus verificaciones vigentes. El nuevo archivo requiere aprobación y una nueva verificación. Mientras la solicitud esté `observado`, el estudiante debe reenviarla antes de que avance a `en_proceso`.
-- El informe técnico distribuye textos largos en varias páginas y conserva caracteres españoles. Una vez generado, se devuelve el mismo archivo en peticiones repetidas; no se sobrescribe después de remitirlo al Consejo.
-- Administrador y Coordinador registran la resolución únicamente en `en_consejo`; la operación finaliza la solicitud en `listo`, habilitando su descarga por el estudiante.
-- El registro público está deshabilitado: `POST /register` responde 403 y no crea cuentas ni tokens. El Administrador crea las cuentas mediante `POST /admin/users`; no construir autorregistro.
-- `GET /roles` (Administrador) devuelve `roles` con nombres y `data` con objetos `{ id, nombre }`. Utilizar `data` para obtener el `rol_id` al crear usuarios.
+1. Administrador: Usuarios → asignar carreras al coordinador; Catálogos académicos → facultades, carreras, modalidades y requisitos.
+2. Coordinador: Estudiantes → crear/editar y asignar destino. Sus cuentas nuevas reciben contraseña temporal.
+3. Estudiante: completar antecedentes, crear solicitud y entregar documentos presencialmente. Consultar checklist y observaciones.
+4. Coordinador: Solicitudes → registrar entrega, validar u observar; recibir correcciones. La revisión avanza automáticamente.
+5. Con documentación completa: mallas, comparaciones, resultado, informe técnico, Consejo y resolución. El estudiante descarga la resolución final.
 
-El porcentaje de equivalencia y los créditos reconocidos los registra el Coordinador; no existe un cálculo automático basado en una normativa institucional. Los catálogos reales, el servidor de integración y las cuentas se preparan con Backend antes de una sesión conjunta.
+La demostración incluye un expediente con dos de seis documentos validados y una observación. Las tres cuentas están indicadas en el README raíz. Los correos de desarrollo se registran localmente; para entrega real debe configurarse SMTP.
 
-## Conexión y cuentas
+## Gestión presencial y nuevos CRUD
 
-El frontend consume HTTP/JSON, nunca accede directamente a PostgreSQL. Backend debe entregar al equipo:
+La documentación se entrega físicamente. **Solo el coordinador valida el checklist**; el administrador configura los requisitos y el estudiante consulta el resultado. Los PDF históricos siguen disponibles mediante descarga privada, pero ya no se cargan ni reemplazan desde el estudiante. La carga de resoluciones y la generación del informe técnico PDF se conservan.
 
-- Dirección accesible de la API y versión/commit que está ejecutándose.
-- Cuentas de prueba por rol, entregadas por un canal privado.
-- Un estudiante con carrera/coordinador asignados y requisitos documentales configurados.
-- Confirmación del origen permitido por CORS y aviso de cambios de contrato.
+### Identificación y estudiantes
 
-Cada integrante puede levantar el backend en su computadora o utilizar un servidor de integración compartido. `localhost` apunta a la computadora donde se abre el navegador: no permite acceder automáticamente al equipo de otro integrante. Una copia en GitHub no equivale a una API desplegada.
+Seleccionar `tipo_identificacion` (`cedula` o `pasaporte`) antes de ingresar `cedula` (se conserva este nombre de campo por compatibilidad). Cédula: exactamente 10 dígitos. Pasaporte: 5–20 letras mayúsculas o números, sin espacios. Es validación de formato, no una consulta al Registro Civil. Ambos identificadores son únicos. El filtro `tipo_identificacion` se admite en usuarios administrativos y estudiantes del coordinador; `search` busca nombre, identificación o correo.
 
-Si se ejecuta el backend localmente, seguir los requisitos del [README](../README.md), configurar una base PostgreSQL exclusiva y ejecutar `composer install`, `php artisan migrate --seed` y `php artisan serve`. En una instalación nueva también se copia `.env.example` a `.env` y se genera `APP_KEY`. Al actualizar una instalación existente se conservan `.env` y `APP_KEY`; no usar `migrate:fresh`, pues elimina los datos.
+Rutas relativas a `/api/v1`:
 
-Para una demostración local, Backend puede ejecutar `php artisan db:seed --class=StudentDemoSeeder`. El estudiante de prueba es `test@example.com` con contraseña inicial `password` (solo local/testing; el seeder no reemplaza contraseñas existentes). El coordinador de demostración tiene una contraseña aleatoria: un Administrador debe establecerle una mediante `PATCH /admin/users/{id}` antes de probar el recorrido de Coordinador. No hay una contraseña administrativa predeterminada. Para crear al Administrador inicial, Backend configura `INITIAL_ADMIN_*` en su `.env` y ejecuta `php artisan db:seed --class=AdminUserSeeder`.
-
-Las carreras institucionales, requisitos y asignaciones de estudiantes se preparan actualmente con Backend; esta entrega no expone su mantenimiento completo por API. Los datos `[DEMO]` permiten integrar el recorrido sin inventar esos valores ni confundirlos con información institucional real.
-
-Para React con Vite, configurar el `.env.local` del frontend con la dirección acordada. Ejemplo para un backend local en el puerto 8000:
-
-```dotenv
-VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
-```
-
-Esta variable es pública. Nunca incluir contraseñas de PostgreSQL, credenciales administrativas ni `APP_KEY` en variables del frontend.
-
-Backend debe poner el origen exacto de la interfaz en `FRONTEND_URL`, por ejemplo `http://localhost:5173`, y ejecutar `php artisan config:clear` tras cambiarlo. `localhost` y `127.0.0.1` son orígenes diferentes; también importa el puerto. Se admiten varios orígenes separados por comas. Reiniciar Vite después de modificar su entorno.
-
-## Login y peticiones JSON
-
-Todas las rutas de las tablas siguientes son relativas a `/api/v1`. La autenticación actual utiliza Bearer, sin cookies de sesión ni `credentials: 'include'`.
-
-```js
-const API = import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '');
-let token = null;
-
-async function api(path, { method = 'GET', body } = {}) {
-  const headers = { Accept: 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-
-  const response = await fetch(`${API}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    throw Object.assign(new Error(data.message ?? 'La operación falló'), {
-      status: response.status,
-      errors: data.errors ?? {},
-    });
-  }
-  return data;
-}
-
-async function login(email, password) {
-  const session = await api('/login', {
-    method: 'POST', body: { email, password },
-  });
-  token = session.token;
-  return session.user;
-}
-
-// Después de login:
-// const session = await api('/me');
-// const profile = await api('/student/profile');
-// await api('/logout', { method: 'POST' });
-// token = null;
-```
-
-El ejemplo conserva el token en memoria: recargar la página requiere iniciar sesión otra vez. No registrar tokens en consola ni compartirlos en capturas. Un 401 en una petición protegida debe llevar a recuperar la sesión.
-
-`/login` devuelve `{ success, user, token, token_type }`; `/me` devuelve `{ success, user }`. `user.roles` es un arreglo de nombres en minúsculas: `administrador`, `coordinador`, `estudiante`. Los endpoints de perfil/detalle normalmente usan `{ success, data }`. No asumir que todas las respuestas tienen la misma envoltura. La autorización definitiva siempre corresponde al backend.
-
-## Primer recorrido del estudiante
-
-| Paso | Petición | Entrada/uso |
-| --- | --- | --- |
-| Consultar perfil | `GET /student/profile` | Datos propios. |
-| Editar celular | `PATCH /student/profile` | `{ "numero_celular": "0991234567" }`; demás datos en solo lectura. |
-| Registrar antecedentes | `POST /student/antecedentes` | `universidad_origen`, `carrera_origen`, `tipo_institucion`, `periodo_cursado`. |
-| Consultar opciones | `GET /student/catalogo` | Usar IDs reales de `data.asignaciones` y `data.tramites`. |
-| Crear solicitud | `POST /student/solicitudes` | `coordinador_carrera_id`, `tramite_proceso_id`, `procedencia_estudios`. |
-| Consultar detalle | `GET /student/solicitudes/{id}` | Requisitos, IDs de documentos, estado y permisos de edición. |
-| Subir documentos | `POST /student/solicitudes/{id}/documentos/{documento}` | Un PDF en el campo `archivo`. |
-| Enviar | `POST /student/solicitudes/{id}/enviar` | Sin body; requiere antecedentes y todos los archivos. |
-| Seguimiento | `GET /student/solicitudes` | Lista propia, con paginación. |
-| Avisos | `GET /student/notificaciones` | Lista propia; `PATCH /student/notificaciones/{uuid}/leer` marca lectura. |
-
-La creación de una solicitud genera los requisitos; el frontend no inventa IDs ni crea documentos requeridos. Un catálogo sin asignaciones debe comunicarse a Backend para preparar la cuenta. No asumir que los IDs coinciden entre bases locales.
-
-El detalle del estudiante entrega `estado_actual` como texto y banderas `puede_editar` y `puede_enviar`. Esta última indica una etapa que permite el envío, pero no garantiza que ya estén completos los requisitos. En el detalle administrativo/coordinador el estado tiene otra estructura: consultar [el contrato](api.md). Después de cada escritura, refrescar el detalle porque el estado puede cambiar automáticamente.
-
-## Subir y descargar PDF
-
-Para subir, usar `FormData` y dejar que el navegador genere `Content-Type` con su boundary:
-
-```js
-async function uploadDocument(solicitudId, documentoId, file) {
-  const form = new FormData();
-  form.append('archivo', file);
-  const response = await fetch(
-    `${API}/student/solicitudes/${solicitudId}/documentos/${documentoId}`,
-    {
-      method: 'POST',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-      body: form,
-    },
-  );
-  const data = await response.json();
-  if (!response.ok) {
-    throw Object.assign(new Error(data.message ?? 'No se pudo subir el PDF'), {
-      status: response.status, errors: data.errors ?? {},
-    });
-  }
-  return data;
-}
-```
-
-El límite predeterminado es 10 MB; Backend puede configurarlo y debe ajustar también los límites de carga de PHP. El archivo se valida por su contenido, no solo por la extensión.
-
-Las descargas requieren el mismo Bearer. Un enlace HTML normal no añade esa cabecera. Solicitar el archivo con `fetch`, comprobar `response.ok`, leer `response.blob()` y descargarlo mediante una URL temporal creada con `URL.createObjectURL`; liberarla después con `URL.revokeObjectURL`. No interpretar una respuesta de error como PDF.
-
-Los `download_url` relativos empiezan en `/api/v1/...`: resolverlos contra el origen del backend (`new URL(downloadUrl, new URL(API).origin)`), sin duplicar `/api/v1`. Usar únicamente destinos del backend acordado para enviar el token. La resolución del estudiante solo está disponible cuando la solicitud está `listo`.
-
-## Errores, paginación y coordinación
-
-| Código | Acción en la interfaz |
+| Método y ruta | Comportamiento |
 | --- | --- |
-| 401 | Credenciales incorrectas en login o sesión ausente/inválida en rutas protegidas. |
-| 403 | Informar falta de permiso o cuenta inactiva. |
-| 404 | Informar recurso no disponible; también se usa para recursos ajenos. |
-| 409 | Mostrar el mensaje y refrescar el detalle antes de reintentar. |
-| 422 | Mostrar `errors` junto a los campos cuando exista; en otro caso mostrar `message`. |
-| 429 | Informar límite de peticiones y esperar antes de reintentar. |
-| 500 | Mostrar error general y comunicar la petición a Backend. |
+| `GET /coordinator/students` | Listar y filtrar estudiantes dentro del alcance del coordinador. |
+| `POST /coordinator/students` | Crear exclusivamente una cuenta de estudiante, enviar contraseña temporal y asignar destino. |
+| `GET /coordinator/students/{id}` | Consultar estudiante y asignaciones visibles. |
+| `PUT /coordinator/students/{id}` | Editar datos y destino de un estudiante actualmente asignado. |
+| `DELETE /coordinator/students/{id}` | Desactivar conservando el historial; 409 si tiene solicitudes activas. |
+| `PATCH /coordinator/students/{id}/status` | Activar/desactivar mediante `cuenta_activa`. |
 
-Los listados paginados generalmente devuelven `data`, `links` y `meta`; los reportes tienen su bloque `paginacion`. Seguir el contrato de cada endpoint.
+Crear/editar requiere `nombres_completos`, `tipo_identificacion`, `cedula`, `email`, `numero_celular`, `carrera_id` y `modalidad_id`. Carrera de destino: una de las asignadas al coordinador. Modalidad: activa y asociada a esa carrera. No se puede cambiar el destino durante una solicitud activa. La carrera e institución de **origen** permanecen en los antecedentes académicos; pueden ser externas. No enviar contraseña ni rol desde este formulario.
 
-Para reportar un problema, enviar método, ruta, estado HTTP, body sin secretos, respuesta, rol utilizado, pasos de reproducción y commit del backend. No incluir contraseñas ni tokens. Acordar una primera prueba conjunta: login → perfil → catálogo → creación → carga de PDF → envío → consulta del coordinador. Mantener este documento y el contrato actualizados en el mismo repositorio.
+### Catálogos del administrador
+
+`GET /admin/catalogs` devuelve `facultades`, `carreras`, `modalidades`, `requisitos` y `tramites`. Para cada catálogo (`facultades`, `carreras`, `modalidades`, `requisitos`):
+
+- `POST /admin/catalogs/{catalog}`: crear.
+- `GET /admin/catalogs/{catalog}/{id}`: consultar.
+- `PUT /admin/catalogs/{catalog}/{id}`: editar.
+- `DELETE /admin/catalogs/{catalog}/{id}`: eliminar solo si no tiene referencias; de lo contrario 409. Puede desactivarse con `activa=false` mediante PUT.
+
+Todos requieren `nombre` y `activa`. Carreras: también `facultad_id` y `modalidad_ids` (lista no vacía). Requisitos: `tramite_proceso_id`, `carrera_id` nullable (null = todas las carreras), `descripcion` nullable y `obligatorio` booleano. Un destino con alumnos asignados no puede perder sus modalidades en uso. La configuración se incorpora como copia en cada solicitud nueva: editar/desactivar un requisito no altera expedientes anteriores. Debe existir al menos un requisito obligatorio activo al crear una solicitud.
+
+Modalidades iniciales: Presencial, Híbrida y En línea, publicadas en el [portal de pregrado de la UEB](https://www.ueb.edu.ec/index.php/pregrado?mode=hibrida). El administrador selecciona las ofrecidas por cada carrera. Los datos marcados `[DEMO]` son ejemplos y no representan el catálogo institucional oficial.
+
+### Checklist y transiciones automáticas
+
+`PATCH /coordinator/documents/{id}/review` acepta:
+
+| `estado` | Uso |
+| --- | --- |
+| `presentado` | Registrar recepción física o recepción de una corrección. No implica aprobación. |
+| `aprobado` | Validar un documento recibido. Registra también la verificación en la misma transacción. |
+| `observado` | Indicar incumplimiento; `observacion` es obligatoria (hasta 2000 caracteres). Invalida verificaciones previas. |
+
+El primer registro inicia `en_revision`. Un requisito obligatorio observado pasa la solicitud a `observado`. Recibir las correcciones pendientes permite volver a `en_revision`. Cuando todos los requisitos obligatorios están validados se pasa automáticamente a `en_proceso`, para análisis académico. No se aprueba automáticamente la homologación. En etapas posteriores ya no se modifica el checklist.
+
+El estudiante obtiene `progreso_documental` (0–100) en el detalle y consulta `documentos`, con `obligatorio`, `presentado`, `recibido_at`, `revisado_at`, responsables y observaciones. El porcentaje es `floor(100 × obligatorios validados / total obligatorios)`; sin requisitos es 0. Los complementarios no incrementan ni bloquean el porcentaje. Se conservan el historial de estados, las observaciones y una auditoría en `historial_documentos`.
+
+Rutas retiradas (410 para recursos propios): `POST /student/solicitudes/{id}/enviar`, `POST /student/solicitudes/{id}/documentos/{documento}` y `POST /coordinator/documents/{id}/verification`. No construir controles de subida, reenvío o doble verificación. `puede_enviar` siempre es false.
+
+## Contraseña temporal y recuperación
+
+Las cuentas creadas por `POST /api/v1/admin/users` reciben una contraseña aleatoria por correo. No enviar `password` al crear o editar usuarios: se rechaza con 422. Las cuentas existentes conservan su acceso. La contraseña temporal caduca en 24 horas (`TEMPORARY_PASSWORD_HOURS`). Se almacena únicamente su hash; si el envío falla, la creación se revierte y puede reintentarse.
+
+`POST /login` y `GET /me` devuelven `user.must_change_password`. Si es `true`, mostrar exclusivamente cambio de contraseña o cierre de sesión. El resto de la API devuelve 403 con `code: PASSWORD_CHANGE_REQUIRED`.
+
+Rutas relativas a `/api/v1`:
+
+| Método y ruta | Datos | Acceso |
+| --- | --- | --- |
+| `POST /change-password` | `current_password`, `password`, `password_confirmation` | Bearer, cuenta activa; permitido durante el primer ingreso |
+| `POST /forgot-password` | `email` | Público, limitado; respuesta genérica para no revelar cuentas |
+| `POST /reset-password` | `email`, `token`, `password`, `password_confirmation` | Público, limitado; token válido durante 60 minutos y de un solo uso |
+
+La nueva contraseña requiere 12 caracteres como mínimo, mayúsculas, minúsculas y números. El cambio inicial exige una contraseña diferente. Al cambiar o recuperar la contraseña se revocan todos los tokens y sesiones; borrar el token local y volver al login. Recuperar la contraseña también permite activar una cuenta cuya contraseña temporal caducó. Las cuentas inactivas no reciben enlaces.
+
+El enlace de recuperación abre el frontend con `?reset_token=...&email=...`. El frontend incluido ya implementa estas pantallas. `FRONTEND_URL` debe apuntar al frontend; si contiene varios orígenes, el primero se utiliza para los correos.
+
+En desarrollo, `MAIL_MAILER=log` escribe los correos en `storage/logs/laravel.log`, **sin enviarlos a una bandeja real**. Para entrega real se requiere configurar el transporte SMTP en `.env`, limpiar la configuración y probar la recepción con una cuenta controlada. No publicar `.env` ni registros que contengan contraseñas temporales o enlaces.
+
+Al actualizar ejecutar `php artisan migrate --no-interaction`. No usar `migrate:fresh` sobre datos que se quieran conservar. La migración añade `must_change_password` y `temporary_password_expires_at` sin reiniciar las contraseñas existentes.

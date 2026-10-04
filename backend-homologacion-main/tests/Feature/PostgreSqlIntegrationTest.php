@@ -18,7 +18,7 @@ class PostgreSqlIntegrationTest extends TestCase
     public function test_suite_uses_real_postgresql_and_custom_role_schema(): void
     {
         $this->assertSame('pgsql', DB::connection()->getDriverName());
-        $this->assertSame('backend_homologacion_test', DB::connection()->getDatabaseName());
+        $this->assertSame('homologacion_ueb_test', DB::connection()->getDatabaseName());
         $this->assertTrue(Schema::hasColumns('roles', ['id', 'nombre']));
         $this->assertFalse(Schema::hasColumn('roles', 'name'));
         $this->assertTrue(Schema::hasTable('user_has_rol'));

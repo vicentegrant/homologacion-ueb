@@ -44,7 +44,8 @@ class SolicitudController extends Controller
 
     public function submit(Request $request, int $solicitud, StudentSolicitudService $service): JsonResponse
     {
-        return $this->response($service->submit($request->user(), $solicitud), $service);
+        $service->owned($request->user(), $solicitud);
+        abort(410, 'La revisión inicia cuando el coordinador registra la entrega presencial.');
     }
 
     private function response(Solicitud $solicitud, StudentSolicitudService $service, int $status = 200): JsonResponse

@@ -25,6 +25,8 @@ type Documento = {
   id: number
   requisito?: { nombre: string; descripcion: string | null }
   estado?: string
+  obligatorio: boolean
+  recibido_at?: string | null
   validez: boolean
   presentado: boolean
   download_url: string | null
@@ -42,20 +44,15 @@ function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; e
   const action = useAction()
   const [observing, setObserving] = useState<number | null>(null)
   const [observacion, setObservacion] = useState('')
-  const editable = estado === 'en_revision' || estado === 'observado'
+  const editable = ['pendiente','en_revision','observado'].includes(estado)
 
-  async function review(doc: Documento, nuevo: 'aprobado' | 'observado') {
-    const ok = await action.run(() => api(`/coordinator/documents/${doc.id}/review`, { method: 'PATCH', body: nuevo === 'observado' ? { estado: nuevo, observacion } : { estado: nuevo } }), nuevo === 'aprobado' ? 'Documento aprobado.' : 'Observación registrada; se notificó al estudiante.')
+  async function review(doc: Documento, nuevo: 'presentado' | 'aprobado' | 'observado') {
+    const ok = await action.run(() => api(`/coordinator/documents/${doc.id}/review`, { method: 'PATCH', body: nuevo === 'observado' ? { estado: nuevo, observacion } : { estado: nuevo } }), nuevo === 'aprobado' ? 'Documento validado.' : nuevo === 'presentado' ? 'Entrega presencial registrada.' : 'Observación registrada; se notificó al estudiante.')
     if (ok) { setObserving(null); setObservacion(''); docs.reload(); onChanged() }
   }
 
-  async function verify(doc: Documento, value: boolean) {
-    const ok = await action.run(() => api(`/coordinator/documents/${doc.id}/verification`, { method: 'POST', body: { estado: value } }), value ? 'Verificación positiva registrada.' : 'Verificación negativa registrada.')
-    if (ok) docs.reload()
-  }
-
   return (
-    <Panel title="Documentación" actions={editable ? <span className="muted">Aprueba y verifica cada documento para pasar a análisis académico.</span> : null}>
+    <Panel title="Documentación" actions={editable ? <span className="muted">Registra la entrega, revisa el documento y valida o explica qué debe corregirse.</span> : null}>
       <Alert error={docs.error ?? action.error} message={action.message} />
       {docs.loading && !docs.data ? <Loading /> : !docs.data?.length ? <Empty>Sin documentos requeridos.</Empty> : (
         <div className="doc-list">{docs.data.map((d) => {
@@ -65,8 +62,8 @@ function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; e
               <div className="doc-main">
                 <strong>{d.requisito?.nombre ?? `Documento #${d.id}`}</strong>
                 <p>
-                  {d.presentado ? 'Archivo cargado' : 'Sin archivo'}
-                  {lastVerification ? ` · Verificación ${lastVerification.estado ? 'positiva' : 'negativa'}` : d.presentado ? ' · Sin verificar' : ''}
+                  {d.recibido_at ? `Recibido presencialmente el ${formatDate(d.recibido_at)}` : 'Pendiente de recepción presencial'}
+                  {d.obligatorio ? ' · Obligatorio' : ' · Complementario'}
                 </p>
                 {d.observaciones?.map((o) => <p key={o.id} className="doc-observation">{formatDate(o.created_at)}: {o.observacion}</p>)}
                 {observing === d.id && (
@@ -79,11 +76,10 @@ function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; e
               <span className={`status ${d.estado === 'aprobado' ? 'approved' : d.estado === 'observado' ? '' : 'received'}`}><i />{docEstadoLabels[d.estado ?? ''] ?? d.estado}</span>
               <div className="doc-actions">
                 {d.download_url && <button className="btn btn-ghost" onClick={() => action.run(() => download(d.download_url!, `${d.requisito?.nombre ?? 'documento'}.pdf`))}><Download size={14} /> Ver</button>}
-                {editable && d.presentado && d.estado !== 'observado' && <>
-                  {d.estado !== 'aprobado' && <button className="btn btn-outline" disabled={action.busy} onClick={() => review(d, 'aprobado')}><Check size={14} /> Aprobar</button>}
-                  <button className="btn btn-ghost" disabled={action.busy} onClick={() => { setObserving(d.id); setObservacion('') }}>Observar</button>
-                  <button className="btn btn-ghost" disabled={action.busy} title="Verificación positiva" onClick={() => verify(d, true)}><Check size={14} /> Verificar</button>
-                  <button className="btn btn-ghost" disabled={action.busy} title="Verificación negativa" onClick={() => verify(d, false)}><X size={14} /></button>
+                {editable && <>
+                  {(!d.recibido_at || d.estado==='observado') && <button className="btn btn-outline" disabled={action.busy} onClick={()=>review(d,'presentado')}>{d.estado==='observado'?'Recibir corrección':'Registrar entrega'}</button>}
+                  {d.recibido_at && d.estado==='presentado' && <button className="btn btn-primary" disabled={action.busy} onClick={()=>review(d,'aprobado')}><Check size={14}/>Validar documento</button>}
+                  <button className="btn btn-ghost" disabled={action.busy} onClick={()=>{setObserving(d.id);setObservacion('')}}>Observar</button>
                 </>}
               </div>
             </article>

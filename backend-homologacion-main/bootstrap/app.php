@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'active' => EnsureAccountIsActive::class,
+            'password.changed' => EnsurePasswordChanged::class,
             'role' => EnsureUserHasRole::class,
         ]);
     })

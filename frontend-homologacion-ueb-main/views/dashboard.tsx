@@ -45,7 +45,7 @@ async function loadDashboard(role: UserRole, user: ApiUser): Promise<DashboardDa
     : await coordinatorApi.reporteSolicitudes({ per_page: 5 })
   const { total, por_estado, registros } = report.data
 
-  let firstDetail = `${countStates(por_estado, ['pendiente'])} pendientes de envío`
+  let firstDetail = `${countStates(por_estado, ['pendiente'])} pendientes de recepción`
   if (role === 'administrador') {
     const dashboard = await adminApi.dashboard()
     firstDetail = `${dashboard.data.usuarios.activos} usuarios activos`

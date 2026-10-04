@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['nombres_completos', 'cedula', 'email', 'password', 'numero_celular', 'cuenta_activa', 'creador_id'])]
+#[Fillable(['nombres_completos', 'tipo_identificacion', 'cedula', 'email', 'password', 'numero_celular', 'cuenta_activa', 'creador_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -33,6 +33,8 @@ class User extends Authenticatable
     {
         return [
             'cuenta_activa' => 'boolean',
+            'must_change_password' => 'boolean',
+            'temporary_password_expires_at' => 'datetime',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];

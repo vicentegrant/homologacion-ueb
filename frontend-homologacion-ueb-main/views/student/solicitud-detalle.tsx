@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Download, Send, Upload } from 'lucide-react'
-import { api, download, upload } from '@/lib/api'
+import { Download, Check } from 'lucide-react'
+import { api, download } from '@/lib/api'
 import { conclusionLabels, docEstadoLabels, formatDate } from '@/lib/format'
 import { Alert, Empty, KeyValue, Loading, PageHeader, Panel, StatusPill, Timeline, useAction, useAsync } from '@/components/app/ui'
 
@@ -10,6 +10,8 @@ type Documento = {
   id: number
   requisito?: { id: number; nombre: string; descripcion: string | null }
   estado?: string
+  obligatorio: boolean
+  recibido_at?: string | null
   validez: boolean
   presentado: boolean
   download_url: string | null
@@ -32,11 +34,6 @@ type Detalle = {
   created_at: string
 }
 
-function canUpload(solicitud: string | null, doc?: string) {
-  if (solicitud === 'pendiente') return doc === 'pendiente' || doc === 'presentado'
-  if (solicitud === 'observado') return doc === 'observado' || doc === 'pendiente'
-  return false
-}
 
 export function StudentSolicitudDetalle({ id }: { id: number }) {
   const detail = useAsync(() => api<{ data: Detalle }>(`/student/solicitudes/${id}`).then((r) => r.data), [id])
@@ -47,18 +44,9 @@ export function StudentSolicitudDetalle({ id }: { id: number }) {
   if (!detail.data) return <><PageHeader title={`Solicitud #${id}`} back="solicitudes" /><Alert error={detail.error} onRetry={detail.reload} /></>
   const s = detail.data
   const docs = s.documentos ?? []
-  const completos = docs.every((d) => d.presentado)
-
-  async function subir(docId: number, file?: File | null) {
-    if (!file) return
-    await action.run(() => upload(`/student/solicitudes/${id}/documentos/${docId}`, { archivo: file }), 'Documento cargado.')
-    detail.reload()
-  }
-
-  async function enviar() {
-    const ok = await action.run(() => api(`/student/solicitudes/${id}/enviar`, { method: 'POST' }), 'Solicitud enviada a revisión.')
-    if (ok) detail.reload()
-  }
+  const required = docs.filter(d=>d.obligatorio)
+  const validated = required.filter(d=>d.estado==='aprobado' && d.validez).length
+  const progress = required.length ? Math.floor(100*validated/required.length) : 0
 
   async function guardarProcedencia() {
     const ok = await action.run(() => api(`/student/solicitudes/${id}`, { method: 'PATCH', body: { procedencia_estudios: procedencia } }), 'Procedencia actualizada.')
@@ -67,13 +55,11 @@ export function StudentSolicitudDetalle({ id }: { id: number }) {
 
   return (
     <>
-      <PageHeader back="solicitudes" kicker={`SOLICITUD #${s.id}`} title={s.tramite ? `${s.tramite.tipo_tramite} · ${s.tramite.tipo_proceso}` : `Solicitud #${s.id}`}
+      <PageHeader back="solicitudes" kicker={`SOLICITUD #${s.id}`} title={s.tramite ? `${s.tramite.tipo_tramite.replaceAll('_', ' ')} · ${s.tramite.tipo_proceso.replaceAll('_', ' ')}` : `Solicitud #${s.id}`}
         actions={<>
           <StatusPill estado={s.estado_actual} />
-          {s.puede_enviar && <button className="btn btn-primary" onClick={enviar} disabled={action.busy || !completos} title={completos ? '' : 'Carga todos los documentos primero'}><Send size={15} /> {s.estado_actual === 'observado' ? 'Reenviar corrección' : 'Enviar a revisión'}</button>}
         </>} />
       <Alert error={action.error} message={action.message} />
-      {s.puede_enviar && !completos && <div className="api-info">Carga todos los documentos requeridos para poder enviar la solicitud. También necesitas antecedentes académicos registrados en tu perfil.</div>}
 
       <div className="grid-2">
         <Panel title="Datos de la solicitud">
@@ -97,24 +83,20 @@ export function StudentSolicitudDetalle({ id }: { id: number }) {
         </Panel>
       </div>
 
-      <Panel title="Documentos requeridos">
+      <Panel className="student-checklist" title="Mi checklist documental" actions={<span className="muted">Entrega y revisión presencial</span>}>
+        <div className="checklist-summary"><div className="checklist-score">{progress}%</div><div><strong>{validated} de {required.length} requisitos obligatorios validados</strong><p>Entrega tus documentos al coordinador. Aquí verás sus validaciones y los motivos de cualquier observación. Completar la documentación no equivale a aprobar la homologación.</p><progress aria-label="Progreso de documentos validados" value={progress} max={100}/></div></div>
         {docs.length === 0 ? <Empty>Esta solicitud no tiene requisitos configurados.</Empty> : (
-          <div className="doc-list">{docs.map((d) => (
-            <article key={d.id} className="doc-item">
+          <div className="doc-list">{docs.map((d, index) => (
+            <article key={d.id} className="doc-item"><span className={`document-step ${d.estado==='aprobado'?'validated':''}`}>{d.estado==='aprobado'?<Check size={17}/>:index+1}</span>
               <div className="doc-main">
                 <strong>{d.requisito?.nombre ?? `Documento #${d.id}`}</strong>
-                {d.requisito?.descripcion && <p>{d.requisito.descripcion}</p>}
+                {d.requisito?.descripcion && <p>{d.requisito.descripcion}</p>}<small className="muted">{d.obligatorio?'Obligatorio':'Complementario'}{d.recibido_at ? ` · Recibido el ${formatDate(d.recibido_at)}` : ' · Pendiente de entrega presencial'}</small>
                 {d.observaciones?.length ? <p className="doc-observation">Observación: {d.observaciones[d.observaciones.length - 1].observacion}</p> : null}
               </div>
               <span className={`status ${d.estado === 'aprobado' ? 'approved' : d.estado === 'observado' ? '' : 'received'}`}><i />{docEstadoLabels[d.estado ?? ''] ?? d.estado}</span>
               <div className="doc-actions">
                 {d.download_url && <button className="btn btn-ghost" onClick={() => action.run(() => download(d.download_url!, `${d.requisito?.nombre ?? 'documento'}.pdf`))}><Download size={14} /> Ver</button>}
-                {canUpload(s.estado_actual, d.estado) && (
-                  <label className="btn btn-outline file-button">
-                    <Upload size={14} /> {d.presentado ? 'Reemplazar' : 'Subir PDF'}
-                    <input type="file" accept="application/pdf" disabled={action.busy} onChange={(e) => { subir(d.id, e.target.files?.[0]); e.target.value = '' }} />
-                  </label>
-                )}
+
               </div>
             </article>
           ))}</div>

@@ -7,10 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['solicitud_id', 'documento_requerido_proceso_id', 'estado_documento_id', 'ruta_documento_oficio', 'validez'])]
+#[Fillable(['solicitud_id', 'documento_requerido_proceso_id', 'estado_documento_id', 'ruta_documento_oficio', 'validez', 'recibido_at', 'recibido_por_id', 'revisado_at', 'revisado_por_id', 'obligatorio', 'requisito_nombre', 'requisito_descripcion'])]
 class SolicitudDocumento extends Model
 {
     protected $table = 'solicitud_documentos';
+
+    public function historial(): HasMany
+    {
+        return $this->hasMany(HistorialDocumento::class);
+    }
 
     /** @return BelongsTo<Solicitud, $this> */
     public function solicitud(): BelongsTo
@@ -45,6 +50,6 @@ class SolicitudDocumento extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['validez' => 'boolean'];
+        return ['validez' => 'boolean', 'obligatorio' => 'boolean', 'recibido_at' => 'datetime', 'revisado_at' => 'datetime'];
     }
 }
