@@ -33,6 +33,8 @@ class StudentSolicitudResource extends JsonResource
             ]),
             'estado_actual' => $state,
             'puede_editar' => $state === 'pendiente',
+            'puede_editar_procedencia' => $this->whenLoaded('estudiante', fn (): bool => $state === 'pendiente'
+                && $this->resource->estudiante->antecedentesAcademicos->sortByDesc('id')->first()?->procedencia === null),
             'puede_enviar' => false,
             'progreso_documental' => $this->whenLoaded('documentos', function (): int {
                 $required = $this->resource->documentos->where('obligatorio', true);

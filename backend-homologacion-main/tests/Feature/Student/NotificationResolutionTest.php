@@ -112,7 +112,6 @@ class NotificationResolutionTest extends StudentWorkflowTestCase
             ['GET', "/api/v1/student/solicitudes/{$solicitud->id}"],
             ['PATCH', "/api/v1/student/solicitudes/{$solicitud->id}"],
             ['POST', "/api/v1/student/solicitudes/{$solicitud->id}/enviar"],
-            ['POST', "/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}"],
             ['GET', "/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}/download"],
             ['GET', "/api/v1/student/solicitudes/{$solicitud->id}/resolucion/download"],
             ['GET', '/api/v1/student/notificaciones'],

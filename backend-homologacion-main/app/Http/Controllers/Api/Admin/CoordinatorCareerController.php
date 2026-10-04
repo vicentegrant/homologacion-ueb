@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\AssignCoordinatorCareersRequest;
 use App\Http\Resources\Api\CareerResource;
 use App\Models\User;
+use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 
 class CoordinatorCareerController extends Controller
 {
@@ -23,26 +23,13 @@ class CoordinatorCareerController extends Controller
         ]);
     }
 
-    public function update(AssignCoordinatorCareersRequest $request, User $coordinator): JsonResponse
+    public function update(AssignCoordinatorCareersRequest $request, User $coordinator, UserService $users): JsonResponse
     {
         if (! $coordinator->hasRole('coordinador')) {
             return response()->json(['success' => false, 'message' => 'El usuario no es Coordinador.'], 422);
         }
 
-        $updated = DB::transaction(function () use ($request, $coordinator): bool {
-            $careerIds = $request->validated('carrera_ids');
-            $assignments = $coordinator->coordinaciones()->lockForUpdate()->get();
-
-            foreach ($assignments as $assignment) {
-                if (! in_array($assignment->carrera_id, $careerIds) && $assignment->estudiantes()->exists()) {
-                    return false;
-                }
-            }
-
-            $coordinator->carrerasCoordinadas()->sync($careerIds);
-
-            return true;
-        });
+        $updated = $users->assignCoordinatorCareers($coordinator, $request->validated('carrera_ids'));
 
         if (! $updated) {
             return response()->json([

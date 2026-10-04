@@ -1,25 +1,31 @@
 'use client'
 
-import { AdminCatalogos } from '@/views/admin/catalogos'
-import { CoordinatorStudents } from '@/views/coordinator/estudiantes'
-import { PasswordView } from '@/views/password'
+import dynamic from 'next/dynamic'
 import { FormEvent, useEffect, useState } from 'react'
 import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { ApiUser, getCurrentUser, getToken, loginRequest, logoutRequest, onUnauthorized, primaryRole, UserRole } from '@/lib/api'
 import { useHashRoute } from '@/lib/router'
 import { BrandMark } from '@/components/app/brand'
 import { AppShell } from '@/components/app/shell'
-import { PageHeader } from '@/components/app/ui'
-import { DashboardView } from '@/views/dashboard'
-import { EstudiantesList, SolicitudesList } from '@/views/shared'
-import { StudentSolicitudes } from '@/views/student/solicitudes'
-import { StudentSolicitudDetalle } from '@/views/student/solicitud-detalle'
-import { StudentPerfil } from '@/views/student/perfil'
-import { StudentNotificaciones } from '@/views/student/notificaciones'
-import { CoordinatorSolicitudDetalle } from '@/views/coordinator/solicitud-detalle'
-import { MallaDetalle, MallasList } from '@/views/coordinator/mallas'
-import { AdminUsuarios } from '@/views/admin/usuarios'
-import { AdminSolicitudDetalle } from '@/views/admin/solicitud-detalle'
+import { Loading, PageHeader } from '@/components/app/ui'
+
+// Descargar cada secci?n cuando se abre, evitando cargar todos los paneles al iniciar.
+const AdminCatalogos = dynamic(() => import('@/views/admin/catalogos').then((module) => module.AdminCatalogos), { loading: () => <Loading text="Cargando secci?n?" /> })
+const CoordinatorStudents = dynamic(() => import('@/views/coordinator/estudiantes').then((module) => module.CoordinatorStudents), { loading: () => <Loading text="Cargando secci?n?" /> })
+const CoordinatorRequirements = dynamic(() => import('@/views/coordinator/requisitos').then((module) => module.CoordinatorRequirements), { loading: () => <Loading text="Cargando secci?n?" /> })
+const PasswordView = dynamic(() => import('@/views/password').then((module) => module.PasswordView), { loading: () => <Loading text="Cargando secci?n?" /> })
+const DashboardView = dynamic(() => import('@/views/dashboard').then((module) => module.DashboardView), { loading: () => <Loading text="Cargando secci?n?" /> })
+const EstudiantesList = dynamic(() => import('@/views/shared').then((module) => module.EstudiantesList), { loading: () => <Loading text="Cargando secci?n?" /> })
+const SolicitudesList = dynamic(() => import('@/views/shared').then((module) => module.SolicitudesList), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentSolicitudes = dynamic(() => import('@/views/student/solicitudes').then((module) => module.StudentSolicitudes), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentSolicitudDetalle = dynamic(() => import('@/views/student/solicitud-detalle').then((module) => module.StudentSolicitudDetalle), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentPerfil = dynamic(() => import('@/views/student/perfil').then((module) => module.StudentPerfil), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentNotificaciones = dynamic(() => import('@/views/student/notificaciones').then((module) => module.StudentNotificaciones), { loading: () => <Loading text="Cargando secci?n?" /> })
+const CoordinatorSolicitudDetalle = dynamic(() => import('@/views/coordinator/solicitud-detalle').then((module) => module.CoordinatorSolicitudDetalle), { loading: () => <Loading text="Cargando secci?n?" /> })
+const MallaDetalle = dynamic(() => import('@/views/coordinator/mallas').then((module) => module.MallaDetalle), { loading: () => <Loading text="Cargando secci?n?" /> })
+const MallasList = dynamic(() => import('@/views/coordinator/mallas').then((module) => module.MallasList), { loading: () => <Loading text="Cargando secci?n?" /> })
+const AdminUsuarios = dynamic(() => import('@/views/admin/usuarios').then((module) => module.AdminUsuarios), { loading: () => <Loading text="Cargando secci?n?" /> })
+const AdminSolicitudDetalle = dynamic(() => import('@/views/admin/solicitud-detalle').then((module) => module.AdminSolicitudDetalle), { loading: () => <Loading text="Cargando secci?n?" /> })
 
 // ---------------------------------------------------------------------------
 // Login
@@ -104,7 +110,8 @@ function RoleRoutes({ user, role, segments }: { user: ApiUser; role: UserRole; s
 
   if (role === 'coordinador') {
     if (section === 'solicitudes') return Number.isFinite(id) ? <CoordinatorSolicitudDetalle id={id} /> : <SolicitudesList base="/coordinator" careers={user.carreras_coordinadas} />
-    if (section === 'estudiantes') return <CoordinatorStudents />
+    if (section === 'estudiantes') return <CoordinatorStudents me={user} />
+    if (section === 'requisitos') return <CoordinatorRequirements />
     if (section === 'mallas') return Number.isFinite(id) ? <MallaDetalle id={id} /> : <MallasList />
   }
 
@@ -150,7 +157,8 @@ export default function Page() {
   const [passwordMode, setPasswordMode] = useState<'forgot' | 'reset' | null>(null)
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has('reset_token')) setPasswordMode('reset')
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('reset_token') || params.has('token')) setPasswordMode('reset')
     onUnauthorized(() => {
       setUser(null)
       setNotice('Tu sesión expiró o fue cerrada. Inicia sesión nuevamente.')
@@ -171,7 +179,7 @@ export default function Page() {
     setNotice('')
     setUser(null)
     window.location.hash = ''
-    window.history.replaceState({}, '', window.location.pathname)
+    window.history.replaceState({}, '', '/')
     setPasswordMode(null)
   }
 
@@ -183,7 +191,7 @@ export default function Page() {
 
   if (checking) return <main className="session-loading"><BrandMark /><p>Verificando sesión...</p></main>
   if (passwordMode) return <PasswordView mode={passwordMode} onDone={handleLogout} />
-  if (user?.must_change_password) return <PasswordView mode="change" onDone={handleLogout} />
+  if (user?.password_temporal || user?.must_change_password) return <PasswordView mode="change" loginEmail={user.email} onChanged={handleLogin} onDone={handleLogout} />
   if (!user) return <LoginView notice={notice} onLogin={handleLogin} onRecover={() => setPasswordMode('forgot')} />
   return <AuthenticatedApp key={user.id} user={user} onLogout={handleLogout} />
 }

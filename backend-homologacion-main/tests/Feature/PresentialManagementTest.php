@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Carrera;
 use App\Models\EstadoDocumento;
 use App\Models\Modalidad;
 use App\Models\Role;
@@ -46,6 +47,8 @@ class PresentialManagementTest extends CoordinatorWorkflowTestCase
         $modality = Modalidad::firstOrFail();
         $c['career']->modalidades()->attach($modality);
         $data = ['nombres_completos' => 'Estudiante Pasaporte', 'tipo_identificacion' => 'pasaporte', 'cedula' => 'AB12345', 'email' => 'passport@example.test', 'numero_celular' => '0991234567', 'carrera_id' => $c['career']->id, 'modalidad_id' => $modality->id];
+        $origin = Carrera::create(['nombre' => 'Carrera de origen']);
+        $data += ['carrera_origen_id' => $origin->id, 'universidad_origen' => 'Universidad de origen', 'tipo_institucion' => 'publica', 'periodo_cursado' => '2024-2025'];
         $this->postJson('/api/v1/coordinator/students', [...$data, 'rol_id' => Role::where('nombre', 'administrador')->firstOrFail()->id])->assertUnprocessable()->assertJsonValidationErrors('rol_id');
         $this->postJson('/api/v1/coordinator/students', [...$data, 'carrera_id' => $c['otherCareer']->id])->assertForbidden();
         $id = $this->postJson('/api/v1/coordinator/students', $data)->assertCreated()->assertJsonPath('data.tipo_identificacion', 'pasaporte')->json('data.id');
@@ -97,7 +100,7 @@ class PresentialManagementTest extends CoordinatorWorkflowTestCase
         $this->asUser($c['student']);
         $this->getJson('/api/v1/student/solicitudes/'.$s->id)->assertOk()->assertJsonPath('data.progreso_documental', 50)->assertJsonPath('data.estado_actual', 'observado')->assertJsonPath('data.documentos.1.observaciones.0.observacion', 'Falta sello.');
         $this->postJson('/api/v1/student/solicitudes/'.$s->id.'/enviar')->assertStatus(410);
-        $this->postJson('/api/v1/student/solicitudes/'.$s->id.'/documentos/'.$first->id)->assertStatus(410);
+        $this->postJson('/api/v1/student/solicitudes/'.$s->id.'/documentos/'.$first->id)->assertNotFound();
         $this->patchJson($url, ['estado' => 'aprobado'])->assertForbidden();
         $this->admin();
         $this->patchJson($url, ['estado' => 'aprobado'])->assertForbidden();

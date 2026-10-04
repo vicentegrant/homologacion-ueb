@@ -20,6 +20,8 @@ class AcademicBackgroundResource extends JsonResource
             'id' => $this->resource->getKey(),
             'universidad_origen' => $this->resource->universidad_origen,
             'carrera_origen' => $this->resource->carrera_origen,
+            'procedencia' => $this->resource->procedencia,
+            'carrera_origen_id' => $this->resource->carrera_origen_id,
             'tipo_institucion' => $this->resource->tipo_institucion,
             'periodo_cursado' => $this->resource->periodo_cursado,
             'created_at' => $this->resource->created_at,

@@ -4,11 +4,15 @@ import { FormEvent, useState } from 'react'
 import { ArrowRight, Plus } from 'lucide-react'
 import { api, Paginated, SolicitudEstudiante } from '@/lib/api'
 import { estadoLabels, formatDate } from '@/lib/format'
+import { Procedure, procedureLabel, Requirement, requirementsFor } from '@/lib/requirements'
 import { href, navigate } from '@/lib/router'
 import { Alert, Empty, Field, fieldError, Loading, PageHeader, Pager, Panel, StatusPill, useAction, useAsync } from '@/components/app/ui'
 
 type Catalogo = {
-  tramites: { id: number; tipo_tramite: string; tipo_proceso: string }[]
+  tramites: Procedure[]
+  requisitos: Requirement[]
+  procedencia_estudios: string | null
+  procedencia_configurada: boolean
   asignaciones: { coordinador_carrera_id: number; carrera: { id: number; nombre: string }; coordinador: { id: number; nombres_completos: string }; disponible: boolean }[]
 }
 
@@ -16,12 +20,16 @@ function NuevaSolicitud({ onCancel }: { onCancel: () => void }) {
   const catalogo = useAsync(() => api<{ data: Catalogo }>('/student/catalogo').then((r) => r.data), [])
   const action = useAction()
   const [form, setForm] = useState({ coordinador_carrera_id: '', tramite_proceso_id: '', procedencia_estudios: '' })
+  const origin = catalogo.data?.procedencia_configurada ? catalogo.data.procedencia_estudios ?? '' : form.procedencia_estudios
+  const selectedAssignment = catalogo.data?.asignaciones.find(a => a.coordinador_carrera_id === Number(form.coordinador_carrera_id))
+  const requirements = selectedAssignment && form.tramite_proceso_id ? requirementsFor(catalogo.data?.requisitos ?? [], selectedAssignment.carrera.id, Number(form.tramite_proceso_id)) : []
+  const ready = !!selectedAssignment?.disponible && requirements.some(r => r.obligatorio) && !catalogo.error
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     const created = await action.run(() => api<{ data: { id: number } }>('/student/solicitudes', {
       method: 'POST',
-      body: { coordinador_carrera_id: Number(form.coordinador_carrera_id), tramite_proceso_id: Number(form.tramite_proceso_id), procedencia_estudios: form.procedencia_estudios },
+      body: { coordinador_carrera_id: Number(form.coordinador_carrera_id), tramite_proceso_id: Number(form.tramite_proceso_id), procedencia_estudios: origin },
     }))
     if (created) navigate(`solicitudes/${created.data.id}`)
   }
@@ -45,13 +53,14 @@ function NuevaSolicitud({ onCancel }: { onCancel: () => void }) {
           <Field label="Trámite y proceso" error={fieldError(action.error, 'tramite_proceso_id')}>
             <select required value={form.tramite_proceso_id} onChange={(e) => setForm({ ...form, tramite_proceso_id: e.target.value })}>
               <option value="">Selecciona…</option>
-              {catalogo.data?.tramites.map((t) => <option key={t.id} value={t.id}>{t.tipo_tramite} · {t.tipo_proceso}</option>)}
+              {catalogo.data?.tramites.map((t) => <option key={t.id} value={t.id}>{procedureLabel(t)}</option>)}
             </select>
           </Field>
-          <Field label="Procedencia de estudios" error={fieldError(action.error, 'procedencia_estudios')} hint="Universidad o instituto donde cursaste las materias.">
-            <input required maxLength={255} value={form.procedencia_estudios} onChange={(e) => setForm({ ...form, procedencia_estudios: e.target.value })} />
+          <Field label="Institución de origen" error={fieldError(action.error, 'procedencia_estudios')} hint={catalogo.data?.procedencia_configurada ? 'Registrada por tu coordinador. No necesitas volver a escribirla.' : 'Universidad o instituto donde cursaste las materias.'}>
+            <input readOnly={catalogo.data?.procedencia_configurada} required maxLength={255} value={origin} onChange={(e) => setForm({ ...form, procedencia_estudios: e.target.value })} />
           </Field>
-          <div className="form-actions"><button className="btn btn-primary" disabled={action.busy}>{action.busy ? 'Creando...' : 'Crear solicitud'}</button></div>
+          {selectedAssignment && form.tramite_proceso_id && <div className="student-requirements-preview"><strong>Documentos para este trámite</strong><p>Entrega estos documentos a tu coordinador. Su validación se realiza presencialmente.</p>{requirements.length ? <ul className="requirement-preview-list">{requirements.map(r => <li key={r.id}><div><strong>{r.nombre}</strong>{r.descripcion && <p>{r.descripcion}</p>}</div><span className="badge">{r.obligatorio ? 'Obligatorio' : 'Complementario'}</span></li>)}</ul> : <Empty>El coordinador debe configurar los requisitos de esta carrera y trámite.</Empty>}{requirements.length > 0 && !requirements.some(r => r.obligatorio) && <p className="form-error">Falta configurar al menos un documento obligatorio antes de crear esta solicitud.</p>}</div>}
+          <div className="form-actions"><button className="btn btn-primary" disabled={action.busy || !ready}>{action.busy ? 'Creando...' : 'Crear solicitud'}</button></div>
         </form>
       )}
     </Panel>

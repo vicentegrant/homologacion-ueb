@@ -1,3 +1,6 @@
+// Se utiliza la misma lista en los formularios del coordinador y del estudiante.
+export const academicCycles = ['Primer', 'Segundo', 'Tercer', 'Cuarto', 'Quinto', 'Sexto', 'Séptimo', 'Octavo', 'Noveno', 'Décimo'].map(cycle => `${cycle} ciclo / semestre`)
+
 export const estadoLabels: Record<string, string> = {
   pendiente: 'Pendiente',
   en_revision: 'En revisión',

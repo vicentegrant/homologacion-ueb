@@ -26,7 +26,7 @@ class StoreSolicitudRequest extends FormRequest
         return [
             'coordinador_carrera_id' => ['required', 'integer'],
             'tramite_proceso_id' => ['required', 'integer', Rule::exists('tramite_proceso', 'id')],
-            'procedencia_estudios' => ['required', 'string', 'max:255'],
+            'procedencia_estudios' => [Rule::requiredIf($this->user()?->antecedentesAcademicos()->latest('id')->first()?->procedencia === null), 'nullable', 'string', 'max:255'],
         ];
     }
 }

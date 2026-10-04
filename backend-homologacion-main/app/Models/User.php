@@ -3,10 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\ResetPasswordNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -14,13 +16,42 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
+use Throwable;
 
-#[Fillable(['nombres_completos', 'tipo_identificacion', 'cedula', 'email', 'password', 'numero_celular', 'cuenta_activa', 'creador_id'])]
+#[Fillable(['nombres_completos', 'tipo_identificacion', 'cedula', 'email', 'password', 'password_temporal', 'numero_celular', 'cuenta_activa', 'creador_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
+    public ?bool $credentialsEmailSent = null;
+
+    protected function mustChangePassword(): Attribute
+    {
+        return Attribute::make(
+            get: fn (mixed $value, array $attributes): bool => (bool) ($attributes['password_temporal'] ?? $value),
+            set: fn (mixed $value): array => ['must_change_password' => (bool) $value, 'password_temporal' => (bool) $value],
+        );
+    }
+
+    protected function passwordTemporal(): Attribute
+    {
+        return Attribute::make(
+            get: fn (mixed $value): bool => (bool) $value,
+            set: fn (mixed $value): array => ['must_change_password' => (bool) $value, 'password_temporal' => (bool) $value],
+        );
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        try {
+            $this->notify(new ResetPasswordNotification($token));
+        } catch (Throwable $exception) {
+            Log::warning('No se pudo enviar el correo de recuperación.', ['user_id' => $this->id, 'exception_type' => $exception::class]);
+        }
+    }
+
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -34,6 +65,8 @@ class User extends Authenticatable
         return [
             'cuenta_activa' => 'boolean',
             'must_change_password' => 'boolean',
+            'password_temporal' => 'boolean',
+            'password_changed_at' => 'datetime',
             'temporary_password_expires_at' => 'datetime',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',

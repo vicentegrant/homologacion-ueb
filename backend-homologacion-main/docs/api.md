@@ -27,7 +27,7 @@ Los errores de validación y de flujo (4xx) tienen `success: false` y `message`.
 | --- | --- | --- | --- |
 | POST | `/register` | Deshabilitado | Devuelve 403; no crea cuentas ni tokens. |
 | POST | `/login` | Público, limitado | `email`, `password` |
-| GET | `/me` | Cualquier cuenta activa | — |
+| GET | `/me` | Cuenta activa con cambio obligatorio completado | — |
 | POST | `/logout` | Cualquier cuenta activa | — |
 | GET | `/roles` | Administrador | — |
 
@@ -53,6 +53,7 @@ Todas las rutas siguientes requieren token activo y rol `Administrador`.
 | GET | `/admin/users/{id}` | Devuelve perfil, rol, creador y carreras coordinadas. |
 | PUT/PATCH | `/admin/users/{id}` | Actualiza exclusivamente campos permitidos. |
 | PATCH | `/admin/users/{id}/status` | Activa o desactiva la cuenta. |
+| DELETE | `/admin/users/{id}` | Elimina una cuenta sin historial; 409 si es la propia cuenta o tiene registros relacionados. Revoca tokens, sesiones y enlaces de recuperación. |
 
 Filtros de listado: `search` (nombre, cédula o correo), `rol`, `cuenta_activa`, `order_by` (`id`, `nombres_completos`, `cedula`, `email`, `created_at`), `direction` (`asc`, `desc`), `page` y `per_page`. Un `rol` inexistente en `roles.nombre` devuelve 422 con un error en `errors.rol`.
 
@@ -69,7 +70,7 @@ Creación:
 }
 ```
 
-`tipo_identificacion` selecciona cédula (10 dígitos) o pasaporte (5–20 letras mayúsculas/números); `numero_celular`, de 7 a 20. Cédula y correo son únicos. `rol_id` debe existir. El sistema genera la contraseña temporal y la envía por correo; no se permite establecerla desde el formulario administrativo. El administrador autenticado no puede desactivar su propia cuenta ni quitarse su propio rol administrativo; esos conflictos devuelven 409. Al desactivar a otro usuario se revocan todos sus tokens.
+`tipo_identificacion` selecciona cédula (10 dígitos) o pasaporte (5–20 letras mayúsculas/números); `numero_celular`, exactamente 10 dígitos. Cédula y correo son únicos. `rol_id` debe existir. El sistema usa la identificación validada como contraseña inicial, la guarda hasheada y exige cambiarla; no se permite establecerla desde el formulario administrativo. El administrador autenticado no puede desactivar su propia cuenta ni quitarse su propio rol administrativo; esos conflictos devuelven 409. Al desactivar a otro usuario se revocan todos sus tokens.
 
 Estado:
 
@@ -106,7 +107,7 @@ Estas rutas requieren token, cuenta activa y rol `Estudiante`. Siempre operan so
 | GET | `/student/antecedentes/{id}` | Consulta un antecedente propio. |
 | PATCH | `/student/antecedentes/{id}` | Actualiza parcialmente un antecedente propio. |
 
-El perfil admite únicamente `numero_celular` (7–20 caracteres). Nombre, cédula, correo, roles, estado de cuenta, creador y contraseña se ignoran y no se modifican desde este endpoint.
+El perfil admite únicamente `numero_celular` (10 dígitos). Nombre, cédula, correo, roles, estado de cuenta, creador y contraseña se ignoran y no se modifican desde este endpoint.
 
 Crear un antecedente requiere los cuatro campos siguientes; `PATCH` admite cualquier subconjunto, sin valores vacíos:
 
@@ -171,7 +172,6 @@ Todas las rutas requieren Sanctum, cuenta activa y rol `Estudiante`. El propieta
 | GET | `/student/solicitudes/{id}` | Detalle, requisitos, archivos, observaciones, historial y resultado propios. |
 | PATCH | `/student/solicitudes/{id}` | Modifica `procedencia_estudios` mientras esté pendiente. |
 | POST | `/student/solicitudes/{id}/enviar` | Retirado: 410. La revisión inicia con recepción presencial. |
-| POST | `/student/solicitudes/{id}/documentos/{documento}` | Retirado: 410. Entrega presencial al coordinador. |
 | GET | `/student/solicitudes/{id}/documentos/{documento}/download` | Descarga privada del documento propio. |
 | GET | `/student/solicitudes/{id}/resolucion/download` | Descarga privada de la resolución cuando el estado es `listo`. |
 | GET | `/student/notificaciones` | Avisos propios paginados; `sin_leer=1` filtra los pendientes. |
@@ -206,13 +206,20 @@ Rutas relativas a `/api/v1`:
 | Método y ruta | Comportamiento |
 | --- | --- |
 | `GET /coordinator/students` | Listar y filtrar estudiantes dentro del alcance del coordinador. |
-| `POST /coordinator/students` | Crear exclusivamente una cuenta de estudiante, enviar contraseña temporal y asignar destino. |
+| `POST /coordinator/students` | Crear exclusivamente una cuenta de estudiante con identificación como contraseña inicial, exigir cambio y asignar destino. |
 | `GET /coordinator/students/{id}` | Consultar estudiante y asignaciones visibles. |
 | `PUT /coordinator/students/{id}` | Editar datos y destino de un estudiante actualmente asignado. |
 | `DELETE /coordinator/students/{id}` | Desactivar conservando el historial; 409 si tiene solicitudes activas. |
 | `PATCH /coordinator/students/{id}/status` | Activar/desactivar mediante `cuenta_activa`. |
 
-Crear/editar requiere `nombres_completos`, `tipo_identificacion`, `cedula`, `email`, `numero_celular`, `carrera_id` y `modalidad_id`. Carrera de destino: una de las asignadas al coordinador. Modalidad: activa y asociada a esa carrera. No se puede cambiar el destino durante una solicitud activa. La carrera e institución de **origen** permanecen en los antecedentes académicos; pueden ser externas. No enviar contraseña ni rol desde este formulario.
+Crear/editar envía `nombres_completos`, `tipo_identificacion`, `cedula`, `email`, `numero_celular`, `carrera_id`, `modalidad_id`, `procedencia` y `periodo_cursado`. La interfaz exige elegir `interna` o `externa`:
+
+- Interna: enviar `carrera_origen_id` del catálogo UEB, activa y distinta del destino; puede pertenecer a otra coordinación. El servidor fija `universidad_origen` como Universidad Estatal de Bolívar y `tipo_institucion` como `publica`.
+- Externa: enviar `universidad_origen`, `tipo_institucion` (`publica`, `privada` o `instituto`) y `carrera_origen` como texto. No requiere una carrera del catálogo UEB ni crea una en él. Puede tener el mismo nombre que el destino por tratarse de otra institución.
+
+Destino: una carrera activa de facultad activa, asignada al coordinador, con una modalidad activa habilitada. El catálogo devuelve `universidad_interna` y `carreras_origen` activas con su facultad. Ciclo: desde `Primer ciclo / semestre` hasta `Décimo ciclo / semestre`; los períodos históricos siguen siendo legibles. Celular: 10 dígitos. No enviar contraseña ni rol.
+
+La migración `2026_10_04_183009_add_origin_provenance_to_antecedentes_academicos_table` agrega procedencia y referencia interna al antecedente. Los registros antiguos quedan sin clasificar; la interfaz exige revisión explícita al editarlos. Por compatibilidad, clientes antiguos sin `procedencia` conservan la validación anterior. No se pueden cambiar institución, procedencia, carreras o modalidad durante una solicitud activa. Los datos de origen clasificados se modifican desde coordinación; el estudiante conserva la edición del ciclo. Todo el registro se guarda en una transacción.
 
 ### Catálogos del administrador
 
@@ -241,7 +248,7 @@ El primer registro inicia `en_revision`. Un requisito obligatorio observado pasa
 
 El estudiante obtiene `progreso_documental` (0–100) en el detalle y consulta `documentos`, con `obligatorio`, `presentado`, `recibido_at`, `revisado_at`, responsables y observaciones. El porcentaje es `floor(100 × obligatorios validados / total obligatorios)`; sin requisitos es 0. Los complementarios no incrementan ni bloquean el porcentaje. Se conservan el historial de estados, las observaciones y una auditoría en `historial_documentos`.
 
-Rutas retiradas (410 para recursos propios): `POST /student/solicitudes/{id}/enviar`, `POST /student/solicitudes/{id}/documentos/{documento}` y `POST /coordinator/documents/{id}/verification`. No construir controles de subida, reenvío o doble verificación. `puede_enviar` siempre es false.
+La antigua ruta de subida del estudiante fue eliminada y devuelve 404. Las rutas `POST /student/solicitudes/{id}/enviar` y `POST /coordinator/documents/{id}/verification` siguen deshabilitadas (410 para recursos propios). No construir controles de subida, reenvío o doble verificación. `puede_enviar` siempre es false.
 
 ### Notificaciones
 
@@ -274,7 +281,7 @@ Consultar el apartado «Checklist y transiciones automáticas». GET de document
 
 | Método | Endpoint | Query/body y validación | Respuesta correcta | Errores específicos |
 | --- | --- | --- | --- | --- |
-| GET | `/coordinator/curricula` | `search`, `tipo`, `carrera`, `estudiante`, `activa`, `per_page` | 200 paginado | 403 carrera ajena; 422 |
+| GET | `/coordinator/curricula` | `search`, `tipo`, `carrera`, `estudiante`, `activa`, `include_subjects`, `per_page` | 200 paginado | 403 carrera ajena; 422 |
 | POST | `/coordinator/curricula` | `nombre`; `tipo`; `carrera_id` requerido si institucional; `estudiante_id` requerido si origen; `activa` opcional | 201; malla | 403 contexto ajeno; 422 |
 | GET | `/coordinator/curricula/{id}` | — | 200; malla, creador y asignaturas | 404 ajena |
 | PUT/PATCH | `/coordinator/curricula/{id}` | `nombre` y/o `activa` | 200; malla actualizada | 404 ajena; 422 |
@@ -288,6 +295,8 @@ Consultar el apartado «Checklist y transiciones automáticas». GET de document
 | PUT | `/coordinator/syllabus-topics/{id}` | `tema` y/o `unidad_analitica` | 200; tema actualizado | 404 ajeno; 422 |
 
 Los ciclos admitidos son `primero` a `decimo`. `hr_carga_horaria` existe en la migración real y es obligatorio. Origen/destino se deduce de `mallas_curriculares.tipo`; no existen campos redundantes.
+
+`include_subjects=1` incluye las asignaturas de cada malla en la misma respuesta, sin temas de sílabo. El análisis académico utiliza esta opción para evitar una petición de detalle por cada malla. Mantiene los mismos filtros, paginación y permisos; sin esta opción el listado conserva su respuesta ligera.
 
 ### Comparaciones, resultado e informe técnico
 
@@ -345,9 +354,9 @@ Cada transición crea una fila, nunca sobrescribe historial, y registra `usuario
 
 ## Contraseña temporal y recuperación
 
-Las cuentas creadas por `POST /api/v1/admin/users` reciben una contraseña aleatoria por correo. No enviar `password` al crear o editar usuarios: se rechaza con 422. Las cuentas existentes conservan su acceso. La contraseña temporal caduca en 24 horas (`TEMPORARY_PASSWORD_HOURS`). Se almacena únicamente su hash; si el envío falla, la creación se revierte y puede reintentarse.
+Las cuentas creadas por `POST /api/v1/admin/users` usan su correo como usuario y su identificación validada como contraseña inicial, guardada únicamente como hash. No enviar `password` al crear o editar usuarios: se rechaza con 422. Las cuentas existentes conservan su acceso. La contraseña inicial no tiene caducidad por tiempo; el cambio es obligatorio antes de acceder al panel. El reenvío conserva su contraseña aleatoria con caducidad de 24 horas (`TEMPORARY_PASSWORD_HOURS`). Se almacena únicamente su hash; si el envío falla, la cuenta se conserva y la respuesta incluye `credentials_email_sent=false`. Solo su creador puede reenviar credenciales mediante POST a `/admin/users/{id}/credentials` o `/coordinator/students/{id}/credentials`; se genera una nueva contraseña y se revocan accesos anteriores.
 
-`POST /login` y `GET /me` devuelven `user.must_change_password`. Si es `true`, mostrar exclusivamente cambio de contraseña o cierre de sesión. El resto de la API devuelve 403 con `code: PASSWORD_CHANGE_REQUIRED`.
+`POST /login` devuelve `user.must_change_password` y el alias compatible `user.password_temporal`. Si es `true`, mostrar exclusivamente cambio de contraseña o cierre de sesión. Todas las demás rutas autenticadas, incluido `GET /me`, devuelven 403 con `code: PASSWORD_CHANGE_REQUIRED`. Tras el cambio, `/me` vuelve a estar disponible e incluye `password_changed_at`.
 
 Rutas relativas a `/api/v1`:
 
@@ -357,10 +366,30 @@ Rutas relativas a `/api/v1`:
 | `POST /forgot-password` | `email` | Público, limitado; respuesta genérica para no revelar cuentas |
 | `POST /reset-password` | `email`, `token`, `password`, `password_confirmation` | Público, limitado; token válido durante 60 minutos y de un solo uso |
 
-La nueva contraseña requiere 12 caracteres como mínimo, mayúsculas, minúsculas y números. El cambio inicial exige una contraseña diferente. Al cambiar o recuperar la contraseña se revocan todos los tokens y sesiones; borrar el token local y volver al login. Recuperar la contraseña también permite activar una cuenta cuya contraseña temporal caducó. Las cuentas inactivas no reciben enlaces.
+La nueva contraseña requiere al menos 8 caracteres, mayúscula, minúscula, número y símbolo; debe diferir de la identificación y de la contraseña actual. Al cambiar o recuperar la contraseña se revocan todos los accesos anteriores y se guarda `password_changed_at`. `/change-password` devuelve un nuevo `token` Bearer: sustituir el token local, consultar `/me` y abrir el panel del rol. `/reset-password` exige volver al login. Recuperar la contraseña también permite activar una cuenta cuya contraseña temporal caducó. Las cuentas inactivas no reciben enlaces.
 
-El enlace de recuperación abre el frontend con `?reset_token=...&email=...`. El frontend incluido ya implementa estas pantallas. `FRONTEND_URL` debe apuntar al frontend; si contiene varios orígenes, el primero se utiliza para los correos.
+El enlace de recuperación abre el frontend en `/restablecer-contrasena?token=...&email=...`. El frontend incluido ya implementa estas pantallas. `FRONTEND_URL` debe apuntar al frontend; si contiene varios orígenes, el primero se utiliza para los correos.
 
-En desarrollo, `MAIL_MAILER=log` escribe los correos en `storage/logs/laravel.log`, **sin enviarlos a una bandeja real**. Para entrega real se requiere configurar el transporte SMTP en `.env`, limpiar la configuración y probar la recepción con una cuenta controlada. No publicar `.env` ni registros que contengan contraseñas temporales o enlaces.
+En desarrollo usar `MAIL_MAILER=smtp` y las credenciales del inbox de Mailtrap. El envío de credenciales se bloquea para transportes de log y failover para evitar registrar contraseñas temporales. Para entrega real se requiere configurar el transporte SMTP en `.env`, limpiar la configuración y probar la recepción con una cuenta controlada. No publicar `.env` ni registros que contengan contraseñas temporales o enlaces.
 
-Al actualizar ejecutar `php artisan migrate --no-interaction`. No usar `migrate:fresh` sobre datos que se quieran conservar. La migración añade `must_change_password` y `temporary_password_expires_at` sin reiniciar las contraseñas existentes.
+Al actualizar ejecutar `php artisan migrate --no-interaction`. No usar `migrate:fresh` sobre datos que se quieran conservar. La nueva migración añade `password_temporal`, copiando el estado existente de `must_change_password` sin reiniciar contraseñas. Los campos se sincronizan desde el modelo.
+## Requisitos configurados por el coordinador
+
+En el menú del coordinador, «Requisitos por trámite» permite seleccionar una carrera asignada y uno de los tres trámites: reconocimiento de malla a malla, homologación entre carreras de la UEB y homologación desde otra institución. Cada combinación tiene su propia lista de documentos, indicaciones, obligatoriedad y disponibilidad.
+
+Rutas relativas a `/api/v1`:
+
+| Método | Ruta | Función |
+| --- | --- | --- |
+| GET | `/coordinator/requirements` | Carreras propias, trámites, requisitos específicos y requisitos institucionales activos |
+| POST | `/coordinator/requirements` | Crear un requisito de una carrera propia |
+| PUT | `/coordinator/requirements/{id}` | Editar o desactivar un requisito de una carrera propia |
+| DELETE | `/coordinator/requirements/{id}` | Eliminar un requisito sin expedientes asociados |
+
+Crear/editar envía `carrera_id`, `tramite_proceso_id`, `nombre` (hasta 150 caracteres), `descripcion` (opcional, hasta 2000), `obligatorio` y `activa`. Los requisitos institucionales (`carrera_id=null`) siguen bajo control administrativo. Se rechazan nombres repetidos para la misma carrera y trámite, incluyendo requisitos institucionales activos, sin distinguir mayúsculas ni espacios exteriores. Un requisito usado no puede eliminarse ni trasladarse a otra carrera o trámite; puede desactivarse para nuevas solicitudes.
+
+`GET /student/catalogo` incluye `requisitos` activos de las carreras asignadas y los generales. El formulario muestra una vista previa según la carrera y trámite elegidos y requiere al menos un documento obligatorio. La creación conserva nombre, indicaciones y obligatoriedad en el checklist del expediente; editar la configuración no altera solicitudes existentes.
+
+Si el coordinador ya clasificó el antecedente de origen, la institución se toma automáticamente de ese registro al crear una solicitud y no se pide repetirla. El servidor también impide modificarla desde una solicitud pendiente y devuelve `puede_editar_procedencia=false`. Los clientes anteriores conservan la edición manual cuando el origen no está clasificado. No hace falta una migración adicional: esta función reutiliza `documentos_requeridos_proceso` y las copias de requisitos existentes.
+
+Prueba manual: entrar como coordinador, configurar un documento obligatorio para cada trámite de una carrera propia, entrar como estudiante y comprobar la vista previa y el checklist. Después, editar o desactivar el requisito y verificar que la solicitud anterior conserva sus instrucciones; una nueva consulta del catálogo debe mostrar la configuración vigente. Intentar editar una carrera ajena o un requisito institucional debe ser rechazado.

@@ -40,14 +40,14 @@ async function loadDashboard(role: UserRole, user: ApiUser): Promise<DashboardDa
     }
   }
 
-  const report = role === 'administrador'
-    ? await adminApi.reporteSolicitudes({ per_page: 5 })
-    : await coordinatorApi.reporteSolicitudes({ per_page: 5 })
+  const [report, dashboard] = await Promise.all([
+    role === 'administrador' ? adminApi.reporteSolicitudes({ per_page: 5 }) : coordinatorApi.reporteSolicitudes({ per_page: 5 }),
+    role === 'administrador' ? adminApi.dashboard() : Promise.resolve(null),
+  ])
   const { total, por_estado, registros } = report.data
 
   let firstDetail = `${countStates(por_estado, ['pendiente'])} pendientes de recepción`
-  if (role === 'administrador') {
-    const dashboard = await adminApi.dashboard()
+  if (dashboard) {
     firstDetail = `${dashboard.data.usuarios.activos} usuarios activos`
   } else if (user.carreras_coordinadas?.length) {
     firstDetail = `${user.carreras_coordinadas.length} carrera(s) asignada(s)`

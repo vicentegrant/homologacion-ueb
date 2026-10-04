@@ -7,6 +7,33 @@ use App\Models\MallaCurricular;
 
 class CurriculumAnalysisTest extends CoordinatorWorkflowTestCase
 {
+    public function test_curricula_include_subjects_in_one_scoped_list_only_when_requested(): void
+    {
+        $context = $this->scenario();
+        $own = MallaCurricular::query()->create([
+            'nombre' => 'Malla propia', 'tipo' => 'institucional',
+            'carrera_id' => $context['career']->id, 'creador_id' => $context['coordinator']->id,
+        ]);
+        $foreign = MallaCurricular::query()->create([
+            'nombre' => 'Malla ajena', 'tipo' => 'institucional',
+            'carrera_id' => $context['otherCareer']->id, 'creador_id' => $context['otherCoordinator']->id,
+        ]);
+        $subject = $this->subject($own, 'PRO-1');
+        $this->subject($foreign, 'EXT-1');
+
+        $this->getJson('/api/v1/coordinator/curricula')->assertOk()
+            ->assertJsonMissingPath('data.0.asignaturas');
+        $this->getJson('/api/v1/coordinator/curricula?include_subjects=1')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $own->id)
+            ->assertJsonCount(1, 'data.0.asignaturas')
+            ->assertJsonPath('data.0.asignaturas.0.id', $subject->id)
+            ->assertJsonMissingPath('data.0.asignaturas.0.temas_silabo');
+        $this->getJson('/api/v1/coordinator/curricula?include_subjects=1&carrera='.$context['otherCareer']->id)
+            ->assertForbidden();
+        $this->getJson('/api/v1/coordinator/curricula?include_subjects=invalido')
+            ->assertUnprocessable()->assertJsonValidationErrors('include_subjects');
+    }
+
     public function test_coordinator_manages_authorized_curricula_subjects_and_syllabus_topics(): void
     {
         $context = $this->scenario();

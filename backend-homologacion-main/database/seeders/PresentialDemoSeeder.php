@@ -24,7 +24,10 @@ class PresentialDemoSeeder extends Seeder
         $users = [];
         foreach (['administrador' => 'Ana Torres · Demo', 'coordinador' => 'Carlos Andrade · Demo', 'estudiante' => 'Daniela Pérez · Demo'] as $role => $name) {
             $index = count($users) + 1;
-            $user = User::firstOrCreate(['email' => $role.'.demo@example.test'], ['nombres_completos' => $name, 'tipo_identificacion' => 'cedula', 'cedula' => '990000000'.$index, 'numero_celular' => '099000000'.$index, 'password' => 'DemoUeb2026!', 'cuenta_activa' => true]);
+            $user = User::firstOrCreate(['email' => $role.'.demo@example.test'], ['nombres_completos' => $name, 'tipo_identificacion' => 'cedula', 'cedula' => '990000000'.$index, 'numero_celular' => '099000000'.$index, 'password' => '990000000'.$index, 'cuenta_activa' => true]);
+            if ($user->wasRecentlyCreated) {
+                $user->forceFill(['must_change_password' => true])->save();
+            }
             $user->assignRole($role);
             $users[$role] = $user;
         }

@@ -30,6 +30,7 @@ class CurriculumIndexRequest extends FormRequest
             'carrera' => ['nullable', 'integer', 'exists:carreras,id'],
             'estudiante' => ['nullable', 'integer', 'exists:users,id'],
             'activa' => ['nullable', 'boolean'],
+            'include_subjects' => ['nullable', 'boolean'],
             'per_page' => ['nullable', 'integer', 'between:1,100'],
         ];
     }

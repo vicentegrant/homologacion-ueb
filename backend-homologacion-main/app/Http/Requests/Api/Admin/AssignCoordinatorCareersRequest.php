@@ -24,7 +24,7 @@ class AssignCoordinatorCareersRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'carrera_ids' => ['required', 'array'],
+            'carrera_ids' => ['present', 'array'],
             'carrera_ids.*' => ['integer', 'distinct', Rule::exists('carreras', 'id')],
         ];
     }

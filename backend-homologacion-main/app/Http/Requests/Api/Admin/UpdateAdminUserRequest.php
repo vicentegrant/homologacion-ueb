@@ -31,9 +31,11 @@ class UpdateAdminUserRequest extends FormRequest
             'tipo_identificacion' => ['sometimes', 'string', 'in:cedula,pasaporte'],
             'cedula' => ['required_with:tipo_identificacion', 'string', new IdentificationNumber($this->input('tipo_identificacion', $this->route('user')?->tipo_identificacion ?? 'cedula')), Rule::unique('users', 'cedula')->ignore($userId)],
             'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
-            'numero_celular' => ['sometimes', 'required', 'string', 'between:7,20'],
+            'numero_celular' => ['sometimes', 'required', 'string', 'regex:/\A[0-9]{10}\z/'],
             'password' => ['prohibited', 'string'],
             'rol_id' => ['sometimes', 'required', 'integer', Rule::exists('roles', 'id')],
+            'carrera_ids' => ['sometimes', 'array'],
+            'carrera_ids.*' => ['integer', 'distinct', Rule::exists('carreras', 'id')],
         ];
     }
 }

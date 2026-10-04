@@ -29,9 +29,11 @@ class StoreAdminUserRequest extends FormRequest
             'tipo_identificacion' => ['required', 'string', 'in:cedula,pasaporte'],
             'cedula' => ['required', 'string', new IdentificationNumber($this->input('tipo_identificacion', $this->route('user')?->tipo_identificacion ?? 'cedula')), Rule::unique('users', 'cedula')],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
-            'numero_celular' => ['required', 'string', 'between:7,20'],
+            'numero_celular' => ['required', 'string', 'regex:/\A[0-9]{10}\z/'],
             'password' => ['prohibited', 'string'],
             'rol_id' => ['required', 'integer', Rule::exists('roles', 'id')],
+            'carrera_ids' => ['sometimes', 'array', 'min:1'],
+            'carrera_ids.*' => ['integer', 'distinct', Rule::exists('carreras', 'id')],
         ];
     }
 }

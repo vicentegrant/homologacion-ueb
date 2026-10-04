@@ -9,7 +9,6 @@ use App\Models\TramiteProceso;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 class StudentDemoSeeder extends Seeder
@@ -28,9 +27,12 @@ class StudentDemoSeeder extends Seeder
         $this->call(DatabaseSeeder::class);
         $student = User::query()->where('email', 'test@example.com')->firstOrFail();
         $coordinator = User::query()->firstOrCreate(['email' => 'coordinador-demo@example.com'], [
-            'nombres_completos' => 'Coordinador de demostración', 'cedula' => 'DEMO-COORD',
-            'numero_celular' => '0000000000', 'password' => Str::random(40),
+            'nombres_completos' => 'Coordinador de demostración', 'cedula' => '0400000006',
+            'numero_celular' => '0000000000', 'password' => '0400000006',
         ]);
+        if ($coordinator->wasRecentlyCreated) {
+            $coordinator->forceFill(['must_change_password' => true])->save();
+        }
         $coordinator->assignRole('coordinador');
         $career = Carrera::query()->firstOrCreate(['nombre' => '[DEMO] Ingeniería de Software']);
         $assignment = CoordinadorCarrera::query()->firstOrCreate(['coordinador_id' => $coordinator->id, 'carrera_id' => $career->id]);

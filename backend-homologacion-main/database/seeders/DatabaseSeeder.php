@@ -29,8 +29,11 @@ class DatabaseSeeder extends Seeder
                 'nombres_completos' => 'Test User',
                 'cedula' => '9999999999',
                 'numero_celular' => '0999999999',
-                'password' => 'password',
+                'password' => '9999999999',
             ]);
+            if ($user->wasRecentlyCreated) {
+                $user->forceFill(['must_change_password' => true])->save();
+            }
             $user->assignRole('estudiante');
         }
 

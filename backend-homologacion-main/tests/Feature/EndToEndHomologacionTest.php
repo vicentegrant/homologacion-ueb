@@ -54,7 +54,7 @@ class EndToEndHomologacionTest extends TestCase
         $this->asUser($student);
         $this->postJson('/api/v1/student/antecedentes', [
             'universidad_origen' => 'Universidad de origen', 'carrera_origen' => 'Tecnologías',
-            'tipo_institucion' => 'pública', 'periodo_cursado' => '2024-2025',
+            'tipo_institucion' => 'publica', 'periodo_cursado' => '2024-2025',
         ])->assertCreated();
         $requestResponse = $this->postJson('/api/v1/student/solicitudes', [
             'coordinador_carrera_id' => $assignment->id, 'tramite_proceso_id' => $process->id,
@@ -133,7 +133,7 @@ class EndToEndHomologacionTest extends TestCase
 
                 return true;
             });
-            $this->withToken($user->createToken('activation')->plainTextToken)->postJson('/api/v1/change-password', ['current_password' => $password, 'password' => 'Permanent123456', 'password_confirmation' => 'Permanent123456'])->assertOk();
+            $this->withToken($user->createToken('activation')->plainTextToken)->postJson('/api/v1/change-password', ['current_password' => $password, 'password' => 'Permanent123456!', 'password_confirmation' => 'Permanent123456!'])->assertOk();
             Auth::forgetGuards();
         }
         $this->withToken($user->createToken('test')->plainTextToken);

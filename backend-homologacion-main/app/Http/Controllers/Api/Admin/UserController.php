@@ -13,10 +13,18 @@ use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class UserController extends Controller
 {
+    public function destroy(Request $request, User $user, UserService $userService): JsonResponse
+    {
+        $userService->delete($user, $request->user());
+
+        return response()->json(['success' => true, 'message' => 'Usuario eliminado correctamente.']);
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -51,7 +59,8 @@ class UserController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Usuario registrado correctamente.',
+            'message' => $user->credentialsEmailSent ? 'Usuario registrado. Credenciales enviadas por correo.' : 'Usuario registrado, pero no se pudo enviar el correo. Puede ingresar con su correo y número de identificación; deberá cambiar la contraseña.',
+            'credentials_email_sent' => $user->credentialsEmailSent,
             'data' => UserResource::make($user),
         ], 201);
     }

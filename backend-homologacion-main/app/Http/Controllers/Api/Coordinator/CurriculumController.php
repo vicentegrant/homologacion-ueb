@@ -28,6 +28,8 @@ class CurriculumController extends Controller
         }
         $records = $access->curricula($request->user())
             ->with(['carrera', 'estudiante', 'creador'])
+            // Cargar asignaturas en bloque evita una petici?n por cada malla.
+            ->when($request->boolean('include_subjects'), fn (Builder $query) => $query->with('asignaturas'))
             ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->where('nombre', 'like', "%{$search}%"))
             ->when($filters['tipo'] ?? null, fn (Builder $query, string $type) => $query->where('tipo', $type))
             ->when($filters['carrera'] ?? null, fn (Builder $query, int $career) => $query->where('carrera_id', $career))

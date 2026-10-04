@@ -632,7 +632,16 @@
                                                     "type": "boolean"
                                                 },
                                                 "must_change_password": {
-                                                    "type": "boolean"
+                                                    "type": "string"
+                                                },
+                                                "password_temporal": {
+                                                    "type": "string"
+                                                },
+                                                "password_changed_at": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
                                                 },
                                                 "roles": {
                                                     "type": "array",
@@ -666,6 +675,8 @@
                                                 "numero_celular",
                                                 "cuenta_activa",
                                                 "must_change_password",
+                                                "password_temporal",
+                                                "password_changed_at",
                                                 "roles",
                                                 "carreras_coordinadas"
                                             ]
@@ -683,49 +694,6 @@
                                         "user",
                                         "token",
                                         "token_type"
-                                    ]
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "anyOf": [
-                                        {
-                                            "type": "object",
-                                            "properties": {
-                                                "success": {
-                                                    "type": "boolean"
-                                                },
-                                                "message": {
-                                                    "type": "string",
-                                                    "const": "La contrase\u00f1a temporal caduc\u00f3. Utilice Recuperar contrase\u00f1a."
-                                                }
-                                            },
-                                            "required": [
-                                                "success",
-                                                "message"
-                                            ]
-                                        },
-                                        {
-                                            "type": "object",
-                                            "properties": {
-                                                "success": {
-                                                    "type": "boolean"
-                                                },
-                                                "message": {
-                                                    "type": "string",
-                                                    "const": "La cuenta se encuentra inactiva."
-                                                }
-                                            },
-                                            "required": [
-                                                "success",
-                                                "message"
-                                            ]
-                                        }
                                     ]
                                 }
                             }
@@ -809,7 +777,16 @@
                                                     "type": "boolean"
                                                 },
                                                 "must_change_password": {
-                                                    "type": "boolean"
+                                                    "type": "string"
+                                                },
+                                                "password_temporal": {
+                                                    "type": "string"
+                                                },
+                                                "password_changed_at": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
                                                 },
                                                 "roles": {
                                                     "type": "array",
@@ -843,6 +820,8 @@
                                                 "numero_celular",
                                                 "cuenta_activa",
                                                 "must_change_password",
+                                                "password_temporal",
+                                                "password_changed_at",
                                                 "roles",
                                                 "carreras_coordinadas"
                                             ]
@@ -1000,6 +979,21 @@
                                         "data": {
                                             "type": "object",
                                             "properties": {
+                                                "procedencia_estudios": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "procedencia_configurada": {
+                                                    "type": "boolean"
+                                                },
+                                                "requisitos": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/CatalogEntryResource"
+                                                    }
+                                                },
                                                 "tramites": {
                                                     "type": "array",
                                                     "items": {
@@ -1074,6 +1068,9 @@
                                                 }
                                             },
                                             "required": [
+                                                "procedencia_estudios",
+                                                "procedencia_configurada",
+                                                "requisitos",
                                                 "tramites",
                                                 "asignaciones"
                                             ]
@@ -1128,6 +1125,35 @@
                                                         "required": [
                                                             "id",
                                                             "nombre"
+                                                        ]
+                                                    }
+                                                },
+                                                "universidad_interna": {
+                                                    "type": "string",
+                                                    "const": "Universidad Estatal de Bol\u00edvar"
+                                                },
+                                                "carreras_origen": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "nombre": {
+                                                                "type": "string"
+                                                            },
+                                                            "facultad": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "nombre",
+                                                            "facultad"
                                                         ]
                                                     }
                                                 },
@@ -1332,6 +1358,8 @@
                                             },
                                             "required": [
                                                 "carreras",
+                                                "universidad_interna",
+                                                "carreras_origen",
                                                 "estados_solicitud",
                                                 "estados_documento",
                                                 "tramites",
@@ -2120,6 +2148,116 @@
                 }
             }
         },
+        "/v1/admin/users/{user}/credentials": {
+            "post": {
+                "operationId": "admin.users.credentials",
+                "tags": [
+                    "Credentials"
+                ],
+                "parameters": [
+                    {
+                        "name": "user",
+                        "in": "path",
+                        "required": true,
+                        "description": "The user ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "credentials_email_sent": {
+                                            "type": "boolean"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "enum": [
+                                                "Nuevas credenciales enviadas. La contrase\u00f1a anterior dej\u00f3 de ser v\u00e1lida.",
+                                                "Se gener\u00f3 una nueva contrase\u00f1a temporal, pero el correo no pudo enviarse. Reintente el env\u00edo o utilice Recuperar contrase\u00f1a."
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "credentials_email_sent",
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/coordinator/students/{student}/credentials": {
+            "post": {
+                "operationId": "credentials.resendStudent",
+                "tags": [
+                    "Credentials"
+                ],
+                "parameters": [
+                    {
+                        "name": "student",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "credentials_email_sent": {
+                                            "type": "boolean"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "enum": [
+                                                "Nuevas credenciales enviadas. La contrase\u00f1a anterior dej\u00f3 de ser v\u00e1lida.",
+                                                "Se gener\u00f3 una nueva contrase\u00f1a temporal, pero el correo no pudo enviarse. Reintente el env\u00edo o utilice Recuperar contrase\u00f1a."
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "credentials_email_sent",
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
         "/v1/coordinator/curricula": {
             "get": {
                 "operationId": "coordinator.curricula.index",
@@ -2175,6 +2313,16 @@
                     },
                     {
                         "name": "activa",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "boolean",
+                                "null"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "include_subjects",
                         "in": "query",
                         "schema": {
                             "type": [
@@ -2749,69 +2897,6 @@
                                     "required": [
                                         "success",
                                         "data"
-                                    ]
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/AuthenticationException"
-                    }
-                }
-            }
-        },
-        "/v1/student/solicitudes/{solicitud}/documentos/{documento}": {
-            "post": {
-                "operationId": "student.documentos.store",
-                "tags": [
-                    "Document"
-                ],
-                "parameters": [
-                    {
-                        "name": "solicitud",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "name": "documento",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "410": {
-                        "description": "An error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "message": {
-                                            "type": "string",
-                                            "description": "Error overview.",
-                                            "examples": [
-                                                "La entrega es presencial. El coordinador registra y valida los documentos."
-                                            ]
-                                        }
-                                    },
-                                    "required": [
-                                        "message"
                                     ]
                                 }
                             }
@@ -3576,12 +3661,21 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "const": "Contrase\u00f1a actualizada. Inicie sesi\u00f3n nuevamente."
+                                            "const": "Contrase\u00f1a actualizada."
+                                        },
+                                        "token": {
+                                            "type": "string"
+                                        },
+                                        "token_type": {
+                                            "type": "string",
+                                            "const": "Bearer"
                                         }
                                     },
                                     "required": [
                                         "success",
-                                        "message"
+                                        "message",
+                                        "token",
+                                        "token_type"
                                     ]
                                 }
                             }
@@ -4115,6 +4209,243 @@
                 }
             }
         },
+        "/v1/coordinator/requirements": {
+            "get": {
+                "operationId": "coordinator.requirements.index",
+                "tags": [
+                    "Requirement"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "carreras": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/Carrera"
+                                                    }
+                                                },
+                                                "tramites": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "tipo_tramite": {
+                                                                "type": "string"
+                                                            },
+                                                            "tipo_proceso": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "tipo_tramite",
+                                                            "tipo_proceso"
+                                                        ]
+                                                    }
+                                                },
+                                                "requisitos": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/CatalogEntryResource"
+                                                    }
+                                                },
+                                                "generales": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/CatalogEntryResource"
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "carreras",
+                                                "tramites",
+                                                "requisitos",
+                                                "generales"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "coordinator.requirements.store",
+                "tags": [
+                    "Requirement"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SaveRequirementRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/CatalogEntryResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            }
+        },
+        "/v1/coordinator/requirements/{requirement}": {
+            "put": {
+                "operationId": "coordinator.requirements.update",
+                "tags": [
+                    "Requirement"
+                ],
+                "parameters": [
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SaveRequirementRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/CatalogEntryResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "coordinator.requirements.destroy",
+                "tags": [
+                    "Requirement"
+                ],
+                "parameters": [
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Requisito eliminado."
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
         "/v1/student/solicitudes/{solicitud}/resolucion/download": {
             "get": {
                 "operationId": "student.resolucion.download",
@@ -4530,6 +4861,7 @@
                                                             "carrera",
                                                             "coordinador",
                                                             "tramite",
+                                                            "puede_editar_procedencia",
                                                             "progreso_documental",
                                                             "documentos",
                                                             "historial_estados",
@@ -4718,6 +5050,7 @@
                                                         "carrera",
                                                         "coordinador",
                                                         "tramite",
+                                                        "puede_editar_procedencia",
                                                         "progreso_documental",
                                                         "documentos",
                                                         "historial_estados",
@@ -4786,6 +5119,7 @@
                                                         "carrera",
                                                         "coordinador",
                                                         "tramite",
+                                                        "puede_editar_procedencia",
                                                         "progreso_documental",
                                                         "documentos",
                                                         "historial_estados",
@@ -4855,6 +5189,7 @@
                                                         "carrera",
                                                         "coordinador",
                                                         "tramite",
+                                                        "puede_editar_procedencia",
                                                         "progreso_documental",
                                                         "documentos",
                                                         "historial_estados",
@@ -5967,6 +6302,16 @@
                                         "success": {
                                             "type": "boolean"
                                         },
+                                        "message": {
+                                            "type": "string",
+                                            "enum": [
+                                                "Estudiante registrado. Credenciales enviadas por correo.",
+                                                "Estudiante registrado, pero no se pudo enviar el correo. Puede ingresar con su correo y n\u00famero de identificaci\u00f3n; deber\u00e1 cambiar la contrase\u00f1a."
+                                            ]
+                                        },
+                                        "credentials_email_sent": {
+                                            "type": "boolean"
+                                        },
                                         "data": {
                                             "allOf": [
                                                 {
@@ -5975,6 +6320,7 @@
                                                 {
                                                     "type": "object",
                                                     "required": [
+                                                        "antecedentes_academicos",
                                                         "carreras"
                                                     ]
                                                 }
@@ -5983,6 +6329,8 @@
                                     },
                                     "required": [
                                         "success",
+                                        "message",
+                                        "credentials_email_sent",
                                         "data"
                                     ]
                                 }
@@ -6276,6 +6624,7 @@
                                                 {
                                                     "type": "object",
                                                     "required": [
+                                                        "antecedentes_academicos",
                                                         "carreras"
                                                     ]
                                                 }
@@ -7456,7 +7805,13 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "const": "Usuario registrado correctamente."
+                                            "enum": [
+                                                "Usuario registrado. Credenciales enviadas por correo.",
+                                                "Usuario registrado, pero no se pudo enviar el correo. Puede ingresar con su correo y n\u00famero de identificaci\u00f3n; deber\u00e1 cambiar la contrase\u00f1a."
+                                            ]
+                                        },
+                                        "credentials_email_sent": {
+                                            "type": "boolean"
                                         },
                                         "data": {
                                             "allOf": [
@@ -7477,6 +7832,7 @@
                                     "required": [
                                         "success",
                                         "message",
+                                        "credentials_email_sent",
                                         "data"
                                     ]
                                 }
@@ -7652,6 +8008,54 @@
                         "$ref": "#/components/responses/ValidationException"
                     }
                 }
+            },
+            "delete": {
+                "operationId": "admin.users.destroy",
+                "tags": [
+                    "User"
+                ],
+                "parameters": [
+                    {
+                        "name": "user",
+                        "in": "path",
+                        "required": true,
+                        "description": "The user ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Usuario eliminado correctamente."
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
             }
         },
         "/v1/admin/users/{user}/status": {
@@ -7779,6 +8183,18 @@
                     "carrera_origen": {
                         "type": "string"
                     },
+                    "procedencia": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "carrera_origen_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
                     "tipo_institucion": {
                         "type": "string"
                     },
@@ -7804,6 +8220,8 @@
                     "id",
                     "universidad_origen",
                     "carrera_origen",
+                    "procedencia",
+                    "carrera_origen_id",
                     "tipo_institucion",
                     "periodo_cursado",
                     "created_at",
@@ -7929,6 +8347,18 @@
                             "null"
                         ],
                         "format": "date-time"
+                    },
+                    "procedencia": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "carrera_origen_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
                     }
                 },
                 "required": [
@@ -7939,7 +8369,9 @@
                     "tipo_institucion",
                     "periodo_cursado",
                     "created_at",
-                    "updated_at"
+                    "updated_at",
+                    "procedencia",
+                    "carrera_origen_id"
                 ],
                 "title": "AntecedenteAcademico"
             },
@@ -7976,7 +8408,6 @@
                         "items": {
                             "type": "integer"
                         },
-                        "minItems": 1,
                         "uniqueItems": true
                     }
                 },
@@ -7998,6 +8429,49 @@
                     "nombre"
                 ],
                 "title": "CareerResource"
+            },
+            "Carrera": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "nombre": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "facultad_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "activa": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "id",
+                    "nombre",
+                    "created_at",
+                    "updated_at",
+                    "facultad_id",
+                    "activa"
+                ],
+                "title": "Carrera"
             },
             "CatalogEntryResource": {
                 "type": "object",
@@ -8841,6 +9315,42 @@
                 ],
                 "title": "SaveCatalogRequest"
             },
+            "SaveRequirementRequest": {
+                "type": "object",
+                "properties": {
+                    "nombre": {
+                        "type": "string",
+                        "maxLength": 150
+                    },
+                    "descripcion": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 2000
+                    },
+                    "carrera_id": {
+                        "type": "integer"
+                    },
+                    "tramite_proceso_id": {
+                        "type": "integer"
+                    },
+                    "activa": {
+                        "type": "boolean"
+                    },
+                    "obligatorio": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "nombre",
+                    "carrera_id",
+                    "tramite_proceso_id",
+                    "activa",
+                    "obligatorio"
+                ],
+                "title": "SaveRequirementRequest"
+            },
             "SaveStudentRequest": {
                 "type": "object",
                 "properties": {
@@ -8865,11 +9375,40 @@
                     },
                     "numero_celular": {
                         "type": "string",
-                        "minLength": 7,
-                        "maxLength": 20
+                        "pattern": "^[0-9]{10}$"
                     },
                     "carrera_id": {
                         "type": "integer"
+                    },
+                    "procedencia": {
+                        "type": "string",
+                        "enum": [
+                            "interna",
+                            "externa"
+                        ]
+                    },
+                    "carrera_origen_id": {
+                        "type": "integer"
+                    },
+                    "carrera_origen": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "universidad_origen": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "tipo_institucion": {
+                        "type": "string",
+                        "enum": [
+                            "publica",
+                            "privada",
+                            "instituto"
+                        ]
+                    },
+                    "periodo_cursado": {
+                        "type": "string",
+                        "pattern": "^(?:(?:Primer|Segundo|Tercer|Cuarto|Quinto|Sexto|S\u00e9ptimo|Octavo|Noveno|D\u00e9cimo) ciclo \\/ semestre|[0-9]{4}(?:-[0-9]{4})?)$"
                     },
                     "modalidad_id": {
                         "type": "integer"
@@ -8897,6 +9436,11 @@
                     "email",
                     "numero_celular",
                     "carrera_id",
+                    "carrera_origen_id",
+                    "carrera_origen",
+                    "universidad_origen",
+                    "tipo_institucion",
+                    "periodo_cursado",
                     "modalidad_id"
                 ],
                 "title": "SaveStudentRequest"
@@ -9164,11 +9708,15 @@
                     },
                     "tipo_institucion": {
                         "type": "string",
-                        "maxLength": 100
+                        "enum": [
+                            "publica",
+                            "privada",
+                            "instituto"
+                        ]
                     },
                     "periodo_cursado": {
                         "type": "string",
-                        "maxLength": 100
+                        "pattern": "^(?:(?:Primer|Segundo|Tercer|Cuarto|Quinto|Sexto|S\u00e9ptimo|Octavo|Noveno|D\u00e9cimo) ciclo \\/ semestre|[0-9]{4}(?:-[0-9]{4})?)$"
                     }
                 },
                 "required": [
@@ -9203,14 +9751,21 @@
                     },
                     "numero_celular": {
                         "type": "string",
-                        "minLength": 7,
-                        "maxLength": 20
+                        "pattern": "^[0-9]{10}$"
                     },
                     "password": {
                         "type": "string"
                     },
                     "rol_id": {
                         "type": "integer"
+                    },
+                    "carrera_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "minItems": 1,
+                        "uniqueItems": true
                     }
                 },
                 "required": [
@@ -9336,14 +9891,16 @@
                         "type": "integer"
                     },
                     "procedencia_estudios": {
-                        "type": "string",
+                        "type": [
+                            "string",
+                            "null"
+                        ],
                         "maxLength": 255
                     }
                 },
                 "required": [
                     "coordinador_carrera_id",
-                    "tramite_proceso_id",
-                    "procedencia_estudios"
+                    "tramite_proceso_id"
                 ],
                 "title": "StoreSolicitudRequest"
             },
@@ -9545,6 +10102,12 @@
                     "cuenta_activa": {
                         "type": "boolean"
                     },
+                    "creador_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
                     "antecedentes_academicos": {
                         "type": "array",
                         "items": {
@@ -9620,6 +10183,7 @@
                     "email",
                     "numero_celular",
                     "cuenta_activa",
+                    "creador_id",
                     "created_at"
                 ],
                 "title": "StudentResource"
@@ -9685,6 +10249,9 @@
                     },
                     "puede_editar": {
                         "type": "boolean"
+                    },
+                    "puede_editar_procedencia": {
+                        "type": "string"
                     },
                     "puede_enviar": {
                         "type": "boolean"
@@ -9987,11 +10554,15 @@
                     },
                     "tipo_institucion": {
                         "type": "string",
-                        "maxLength": 100
+                        "enum": [
+                            "publica",
+                            "privada",
+                            "instituto"
+                        ]
                     },
                     "periodo_cursado": {
                         "type": "string",
-                        "maxLength": 100
+                        "pattern": "^(?:(?:Primer|Segundo|Tercer|Cuarto|Quinto|Sexto|S\u00e9ptimo|Octavo|Noveno|D\u00e9cimo) ciclo \\/ semestre|[0-9]{4}(?:-[0-9]{4})?)$"
                     }
                 },
                 "title": "UpdateAcademicBackgroundRequest"
@@ -10020,14 +10591,20 @@
                     },
                     "numero_celular": {
                         "type": "string",
-                        "minLength": 7,
-                        "maxLength": 20
+                        "pattern": "^[0-9]{10}$"
                     },
                     "password": {
                         "type": "string"
                     },
                     "rol_id": {
                         "type": "integer"
+                    },
+                    "carrera_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "uniqueItems": true
                     }
                 },
                 "title": "UpdateAdminUserRequest"
@@ -10091,8 +10668,7 @@
                 "properties": {
                     "numero_celular": {
                         "type": "string",
-                        "minLength": 7,
-                        "maxLength": 20
+                        "pattern": "^[0-9]{10}$"
                     }
                 },
                 "title": "UpdateProfileRequest"

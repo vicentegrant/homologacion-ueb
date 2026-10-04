@@ -20,7 +20,7 @@ class StudentSolicitudService
     /** @return list<string> */
     public function relations(): array
     {
-        return ['carrera', 'coordinador', 'tramiteProceso.tipoTramite', 'tramiteProceso.tipoProceso',
+        return ['carrera', 'coordinador', 'estudiante.antecedentesAcademicos', 'tramiteProceso.tipoTramite', 'tramiteProceso.tipoProceso',
             'ultimoHistorialEstado.estadoSolicitud', 'documentos.documentoRequerido',
             'documentos.estadoDocumento', 'documentos.observaciones', 'historialEstados.estadoSolicitud',
             'resolucion', 'resultado'];
@@ -36,7 +36,7 @@ class StudentSolicitudService
         return $this->workflow->currentState($solicitud);
     }
 
-    /** @param array{coordinador_carrera_id: int, tramite_proceso_id: int, procedencia_estudios: string} $data */
+    /** @param array{coordinador_carrera_id: int, tramite_proceso_id: int, procedencia_estudios?: string|null} $data */
     public function create(User $student, array $data): Solicitud
     {
         return DB::transaction(function () use ($student, $data): Solicitud {
@@ -56,12 +56,14 @@ class StudentSolicitudService
             abort_if($existing, 409, 'Ya tiene una solicitud activa para esta carrera y trámite.');
 
             $requirements = DocumentoRequeridoProceso::query()->where('activo', true)->where('tramite_proceso_id', $data['tramite_proceso_id'])
-                ->where(fn (Builder $query): Builder => $query->whereNull('carrera_id')->orWhere('carrera_id', $assignment->carrera_id))->get();
+                ->where(fn (Builder $query): Builder => $query->whereNull('carrera_id')->orWhere('carrera_id', $assignment->carrera_id))->orderBy('id')->lockForUpdate()->get();
             abort_if($requirements->isEmpty() || ! $requirements->contains('obligatorio', true), 409, 'No hay documentos requeridos configurados para esta carrera y trámite.');
 
+            $background = $student->antecedentesAcademicos()->latest('id')->first();
             $solicitud = $student->solicitudesComoEstudiante()->create([
                 'coordinador_id' => $coordinator->id, 'carrera_id' => $assignment->carrera_id,
-                'tramite_proceso_id' => $data['tramite_proceso_id'], 'procedencia_estudios' => $data['procedencia_estudios'],
+                'tramite_proceso_id' => $data['tramite_proceso_id'],
+                'procedencia_estudios' => $background?->procedencia !== null ? $background->universidad_origen : $data['procedencia_estudios'],
             ]);
             $pendingDocument = EstadoDocumento::query()->where('nombre', 'pendiente')->firstOrFail();
             foreach ($requirements as $requirement) {
@@ -83,6 +85,10 @@ class StudentSolicitudService
         return DB::transaction(function () use ($student, $id, $data): Solicitud {
             $solicitud = $this->owned($student, $id, true);
             abort_unless($this->state($solicitud) === 'pendiente', 409, 'Solo puede editar una solicitud pendiente.');
+            $background = $student->antecedentesAcademicos()->latest('id')->first();
+            if ($background?->procedencia !== null && isset($data['procedencia_estudios']) && $data['procedencia_estudios'] !== $solicitud->procedencia_estudios) {
+                throw ValidationException::withMessages(['procedencia_estudios' => 'La institución de origen está registrada por su coordinador. Solicite su revisión en coordinación.']);
+            }
             $solicitud->update($data);
 
             return $solicitud;

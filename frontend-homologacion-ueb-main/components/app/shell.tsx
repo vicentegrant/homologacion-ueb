@@ -26,6 +26,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { path: '', label: 'Panel principal', icon: LayoutDashboard },
     { path: 'solicitudes', label: 'Solicitudes', icon: ClipboardCheck },
     { path: 'estudiantes', label: 'Estudiantes', icon: GraduationCap },
+    { path: 'requisitos', label: 'Requisitos por trámite', icon: ClipboardCheck },
     { path: 'mallas', label: 'Mallas curriculares', icon: BookOpen },
   ],
   administrador: [

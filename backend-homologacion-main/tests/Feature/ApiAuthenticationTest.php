@@ -82,7 +82,7 @@ class ApiAuthenticationTest extends TestCase
         $this->assertDatabaseCount('users', 0);
     }
 
-    public function test_login_returns_403_when_account_is_inactive(): void
+    public function test_login_returns_generic_error_when_account_is_inactive(): void
     {
         $user = User::factory()->create([
             'cuenta_activa' => false,
@@ -92,9 +92,9 @@ class ApiAuthenticationTest extends TestCase
         $this->postJson('/api/v1/login', [
             'email' => $user->email,
             'password' => 'password123',
-        ])->assertForbidden()->assertExactJson([
+        ])->assertUnauthorized()->assertExactJson([
             'success' => false,
-            'message' => 'La cuenta se encuentra inactiva.',
+            'message' => 'Credenciales incorrectas.',
         ]);
     }
 

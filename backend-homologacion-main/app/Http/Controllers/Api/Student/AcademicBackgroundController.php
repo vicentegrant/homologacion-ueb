@@ -9,6 +9,7 @@ use App\Http\Resources\Api\AcademicBackgroundResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\ValidationException;
 
 class AcademicBackgroundController extends Controller
 {
@@ -42,7 +43,16 @@ class AcademicBackgroundController extends Controller
     public function update(UpdateAcademicBackgroundRequest $request, int $antecedente): JsonResponse
     {
         $record = $request->user()->antecedentesAcademicos()->findOrFail($antecedente);
-        $record->update($request->validated());
+        $data = $request->validated();
+        // Los datos de origen clasificados por coordinación deben mantenerse coherentes.
+        if ($record->procedencia !== null) {
+            foreach (['universidad_origen', 'carrera_origen', 'tipo_institucion'] as $field) {
+                if (array_key_exists($field, $data) && $data[$field] !== $record->{$field}) {
+                    throw ValidationException::withMessages([$field => 'Solicite al coordinador modificar los datos de origen de esta homologación.']);
+                }
+            }
+        }
+        $record->update($data);
 
         return response()->json([
             'success' => true,

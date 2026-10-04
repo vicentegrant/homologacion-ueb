@@ -29,18 +29,14 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+        if (! $user || ! Hash::check($data['password'], $user->password) || ! $user->cuenta_activa || ($user->must_change_password && $user->temporary_password_expires_at?->isPast())) {
             return response()->json(['success' => false, 'message' => 'Credenciales incorrectas.'], 401);
         }
 
-        if (! $user->cuenta_activa) {
-            return response()->json(['success' => false, 'message' => 'La cuenta se encuentra inactiva.'], 403);
+        // Sanctum genera un token distinto en cada autenticación correcta.
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
         }
-
-        if ($user->must_change_password && $user->temporary_password_expires_at?->isPast()) {
-            return response()->json(['success' => false, 'message' => 'La contraseña temporal caducó. Utilice Recuperar contraseña.'], 403);
-        }
-
         $token = (string) $user->createToken('frontend')->plainTextToken;
 
         return response()->json([
@@ -82,6 +78,8 @@ class AuthController extends Controller
             'numero_celular' => $user->numero_celular,
             'cuenta_activa' => $user->cuenta_activa,
             'must_change_password' => $user->must_change_password,
+            'password_temporal' => $user->password_temporal,
+            'password_changed_at' => $user->password_changed_at?->toISOString(),
             'roles' => $user->getRoleNames()->values()->all(),
         ];
 

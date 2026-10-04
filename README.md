@@ -146,11 +146,13 @@ Después de ejecutar `php artisan db:seed --class=PresentialDemoSeeder`:
 
 | Rol | Correo | Contraseña inicial |
 | --- | --- | --- |
-| Administrador | `administrador.demo@example.test` | `DemoUeb2026!` |
-| Coordinador | `coordinador.demo@example.test` | `DemoUeb2026!` |
-| Estudiante | `estudiante.demo@example.test` | `DemoUeb2026!` |
+| Administrador | `administrador.demo@example.test` | `9900000001` |
+| Coordinador | `coordinador.demo@example.test` | `9900000002` |
+| Estudiante | `estudiante.demo@example.test` | `9900000003` |
 
-El seeder está restringido a local/testing, es repetible y no reemplaza contraseñas existentes. Estas cuentas son solo de demostración. Las cuentas nuevas creadas desde la interfaz reciben una contraseña temporal aleatoria y deben cambiarla al ingresar. `MAIL_MAILER=log` registra los correos en `storage/logs/laravel.log`; configurar SMTP para envío real.
+Estos valores iniciales corresponden a cuentas nuevas. El seeder está restringido a local/testing, es repetible y no reemplaza contraseñas existentes; las cuentas de demostración anteriores conservan su contraseña. Las cuentas nuevas ingresan con su correo y su identificación y deben cambiarla al ingresar. Configurar SMTP para envío real; las credenciales no se envían al transporte de logs.
+
+Para probar desde cero los tres roles sin reiniciar cuentas existentes, ejecutar `php artisan auth:reset-demo` desde el backend. Crea tres cuentas independientes y permite repetir el cambio obligatorio. Credenciales, validaciones y guía completa: [Prueba de autenticación](backend-homologacion-main/docs/prueba-autenticacion.md).
 
 ## 7. Flujo de prueba sugerido
 

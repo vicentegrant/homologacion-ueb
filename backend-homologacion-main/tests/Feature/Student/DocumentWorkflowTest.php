@@ -28,7 +28,7 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
             ->assertStreamedContent("%PDF-1.4\nnotas");
     }
 
-    public function test_legacy_storage_service_replacement_preserves_file_integrity(): void
+    public function test_removed_upload_endpoint_preserves_historical_file_integrity(): void
     {
         $context = $this->scenario();
         $solicitud = $this->draft($context);
@@ -36,10 +36,10 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
         $document = $solicitud->documentos()->firstOrFail();
         $oldPath = $document->ruta_documento_oficio;
 
-        $this->upload($solicitud);
+        $this->postJson("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}")->assertNotFound();
 
-        Storage::disk('local')->assertMissing($oldPath);
-        Storage::disk('local')->assertExists($document->fresh()->ruta_documento_oficio);
+        $this->assertSame($oldPath, $document->fresh()->ruta_documento_oficio);
+        Storage::disk('local')->assertExists($oldPath);
         $this->assertCount(1, Storage::disk('local')->allFiles());
         $this->assertDatabaseCount('solicitud_documentos', 1);
     }
@@ -54,10 +54,10 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
         $source = UploadedFile::fake()->createWithContent('false.pdf', 'not a pdf');
         $disguised = new UploadedFile($source->getPathname(), 'false.pdf', 'application/pdf', null, true);
         $this->post($url, ['archivo' => $disguised], ['Accept' => 'application/json'])
-            ->assertStatus(410);
+            ->assertNotFound();
         $this->post($url, ['archivo' => UploadedFile::fake()->create('large.pdf', 10241, 'application/pdf')], ['Accept' => 'application/json'])
-            ->assertStatus(410);
-        $this->postJson($url, [])->assertStatus(410);
+            ->assertNotFound();
+        $this->postJson($url, [])->assertNotFound();
 
         $this->assertNull($document->fresh()->ruta_documento_oficio);
         $this->assertCount(0, Storage::disk('local')->allFiles());
@@ -73,7 +73,7 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
             $this->state($solicitud, $state);
             $this->post("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}", [
                 'archivo' => UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nnotas"),
-            ], ['Accept' => 'application/json'])->assertStatus(410);
+            ], ['Accept' => 'application/json'])->assertNotFound();
         }
 
         $this->assertNull($document->fresh()->ruta_documento_oficio);
@@ -106,7 +106,7 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
 
         $this->post("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}", [
             'archivo' => UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nnotas"),
-        ], ['Accept' => 'application/json'])->assertStatus(410);
+        ], ['Accept' => 'application/json'])->assertNotFound();
 
         $this->assertSame($oldPath, $document->fresh()->ruta_documento_oficio);
         $this->assertTrue($document->fresh()->validez);
@@ -163,7 +163,7 @@ class DocumentWorkflowTest extends StudentWorkflowTestCase
         try {
             $this->post("/api/v1/student/solicitudes/{$solicitud->id}/documentos/{$document->id}", [
                 'archivo' => UploadedFile::fake()->createWithContent('notas.pdf', "%PDF-1.4\nreemplazo"),
-            ], ['Accept' => 'application/json'])->assertStatus(410);
+            ], ['Accept' => 'application/json'])->assertNotFound();
         } finally {
             SolicitudDocumento::setEventDispatcher($originalDispatcher);
         }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\Student;
 
+use App\Models\AntecedenteAcademico;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -25,8 +26,8 @@ class UpdateAcademicBackgroundRequest extends FormRequest
         return [
             'universidad_origen' => ['sometimes', 'required', 'string', 'max:255'],
             'carrera_origen' => ['sometimes', 'required', 'string', 'max:255'],
-            'tipo_institucion' => ['sometimes', 'required', 'string', 'max:100'],
-            'periodo_cursado' => ['sometimes', 'required', 'string', 'max:100'],
+            'tipo_institucion' => ['sometimes', 'required', 'string', 'in:publica,privada,instituto'],
+            'periodo_cursado' => ['sometimes', 'required', 'string', 'regex:'.AntecedenteAcademico::PERIOD_PATTERN],
         ];
     }
 }

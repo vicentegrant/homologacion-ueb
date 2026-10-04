@@ -23,7 +23,7 @@ class UpdateProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'numero_celular' => ['sometimes', 'required', 'string', 'between:7,20'],
+            'numero_celular' => ['sometimes', 'required', 'string', 'regex:/\A[0-9]{10}\z/'],
         ];
     }
 }

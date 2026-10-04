@@ -85,7 +85,7 @@ class CatalogManagementController extends Controller
                 $record->delete();
             });
         } catch (QueryException $e) {
-            if ($e->getCode() === '23503') {
+            if (in_array($e->getCode(), ['23503', '23001'], true)) {
                 abort(409, 'El registro está en uso. Puede desactivarlo para conservar las referencias.');
             }
             throw $e;

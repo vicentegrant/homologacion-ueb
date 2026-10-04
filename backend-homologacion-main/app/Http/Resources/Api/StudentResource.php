@@ -25,6 +25,7 @@ class StudentResource extends JsonResource
             'email' => $this->resource->email,
             'numero_celular' => $this->resource->numero_celular,
             'cuenta_activa' => $this->resource->cuenta_activa,
+            'creador_id' => $this->resource->creador_id,
             'antecedentes_academicos' => $this->whenLoaded('antecedentesAcademicos'),
             'carreras' => $this->whenLoaded('carrerasComoEstudiante', fn () => $this->resource->carrerasComoEstudiante->map(fn (EstudianteCarrera $assignment): array => [
                 'id' => $assignment->coordinadorCarrera?->carrera?->getKey(),

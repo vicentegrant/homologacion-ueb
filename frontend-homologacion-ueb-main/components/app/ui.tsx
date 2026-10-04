@@ -2,7 +2,7 @@
 
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
-import { ApiError } from '@/lib/api'
+import { ApiError, invalidateApiCache } from '@/lib/api'
 import { estadoClass, estadoLabel } from '@/lib/format'
 import { href } from '@/lib/router'
 
@@ -13,25 +13,42 @@ import { href } from '@/lib/router'
 export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<ApiError | Error | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [pending, setPending] = useState(true)
   const loaderRef = useRef(loader)
+  const sequence = useRef(0)
+  const mounted = useRef(false)
   loaderRef.current = loader
-
-  const reload = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async () => {
+    const request = ++sequence.current
+    setPending(true)
     setError(null)
     try {
-      setData(await loaderRef.current())
+      const result = await loaderRef.current()
+      if (mounted.current && request === sequence.current) setData(result)
     } catch (err) {
-      setError(err as Error)
+      if (mounted.current && request === sequence.current) setError(err as Error)
     } finally {
-      setLoading(false)
+      if (mounted.current && request === sequence.current) setPending(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
+  const reload = useCallback(async () => { invalidateApiCache(); await load() }, [load])
+  useEffect(() => {
+    mounted.current = true
+    void load()
+    return () => { mounted.current = false; sequence.current++ }
+  }, [load])
+  // Mantener el contenido visible durante actualizaciones en segundo plano.
+  return { data, error, loading: pending && data === null, refreshing: pending && data !== null, reload, setData }
+}
 
-  useEffect(() => { reload() }, [reload])
-  return { data, error, loading, reload, setData }
+export function useDebouncedValue<T>(value: T, delay = 250) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debounced
 }
 
 /** Ejecuta una acción de escritura mostrando su error y ocupado. */

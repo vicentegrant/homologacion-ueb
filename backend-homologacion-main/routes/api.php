@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Coordinator\ComparisonController as CoordinatorComp
 use App\Http\Controllers\Api\Coordinator\CurriculumController as CoordinatorCurriculumController;
 use App\Http\Controllers\Api\Coordinator\DocumentController as CoordinatorDocumentController;
 use App\Http\Controllers\Api\Coordinator\ReportController as CoordinatorReportController;
+use App\Http\Controllers\Api\Coordinator\RequirementController as CoordinatorRequirementController;
 use App\Http\Controllers\Api\Coordinator\ResolutionController as CoordinatorResolutionController;
 use App\Http\Controllers\Api\Coordinator\SolicitudController as CoordinatorSolicitudController;
 use App\Http\Controllers\Api\Coordinator\SolicitudStateController as CoordinatorSolicitudStateController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\Coordinator\StudentController as CoordinatorStudent
 use App\Http\Controllers\Api\Coordinator\SubjectController as CoordinatorSubjectController;
 use App\Http\Controllers\Api\Coordinator\SyllabusTopicController as CoordinatorSyllabusTopicController;
 use App\Http\Controllers\Api\Coordinator\TechnicalReportController as CoordinatorTechnicalReportController;
+use App\Http\Controllers\Api\CredentialsController;
 use App\Http\Controllers\Api\PasswordController;
 use App\Http\Controllers\Api\Student\AcademicBackgroundController;
 use App\Http\Controllers\Api\Student\CatalogController;
@@ -51,7 +53,8 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
     Route::middleware(['auth:sanctum', 'active', 'password.changed'])->group(function (): void {
-        Route::get('/me', [AuthController::class, 'me'])->withoutMiddleware('password.changed');
+        // Solo cambiar la contraseña y cerrar sesión quedan fuera del bloqueo.
+        Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout'])->withoutMiddleware('password.changed');
         Route::post('/change-password', [PasswordController::class, 'change'])->withoutMiddleware('password.changed')->middleware('throttle:5,1');
         Route::get('/roles', [AuthController::class, 'roles'])->middleware('role:administrador');
@@ -63,7 +66,6 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/solicitudes/{solicitud}', [StudentSolicitudController::class, 'show'])->whereNumber('solicitud')->name('solicitudes.show');
             Route::patch('/solicitudes/{solicitud}', [StudentSolicitudController::class, 'update'])->whereNumber('solicitud')->name('solicitudes.update');
             Route::post('/solicitudes/{solicitud}/enviar', [StudentSolicitudController::class, 'submit'])->whereNumber('solicitud')->name('solicitudes.submit');
-            Route::post('/solicitudes/{solicitud}/documentos/{documento}', [DocumentController::class, 'store'])->whereNumber(['solicitud', 'documento'])->middleware('throttle:30,1')->name('documentos.store');
             Route::get('/solicitudes/{solicitud}/documentos/{documento}/download', [DocumentController::class, 'download'])->whereNumber(['solicitud', 'documento'])->name('documentos.download');
             Route::get('/solicitudes/{solicitud}/resolucion/download', [StudentResolutionController::class, 'download'])->whereNumber('solicitud')->name('resolucion.download');
             Route::get('/notificaciones', [NotificationController::class, 'index'])->name('notificaciones.index');
@@ -87,6 +89,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
             Route::match(['put', 'patch'], '/users/{user}', [UserController::class, 'update'])->name('users.update');
             Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])->name('users.status');
+            Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+            Route::post('/users/{user}/credentials', [CredentialsController::class, 'resend'])->middleware('throttle:5,1')->name('users.credentials');
 
             Route::get('/coordinators/{coordinator}/careers', [CoordinatorCareerController::class, 'index'])->name('coordinators.careers.index');
             Route::put('/coordinators/{coordinator}/careers', [CoordinatorCareerController::class, 'update'])->name('coordinators.careers.update');
@@ -106,7 +110,12 @@ Route::prefix('v1')->group(function (): void {
 
         Route::prefix('coordinator')->name('coordinator.')->middleware('role:coordinador')->group(function (): void {
             Route::get('/catalogo', CoordinatorCatalogController::class)->name('catalogo');
+            Route::get('/requirements', [CoordinatorRequirementController::class, 'index'])->name('requirements.index');
+            Route::post('/requirements', [CoordinatorRequirementController::class, 'store'])->name('requirements.store');
+            Route::put('/requirements/{requirement}', [CoordinatorRequirementController::class, 'update'])->whereNumber('requirement')->name('requirements.update');
+            Route::delete('/requirements/{requirement}', [CoordinatorRequirementController::class, 'destroy'])->whereNumber('requirement')->name('requirements.destroy');
             Route::post('/students', [CoordinatorStudentController::class, 'store'])->middleware('throttle:20,1');
+            Route::post('/students/{student}/credentials', [CredentialsController::class, 'resendStudent'])->whereNumber('student')->middleware('throttle:5,1');
             Route::put('/students/{student}', [CoordinatorStudentController::class, 'update'])->whereNumber('student');
             Route::delete('/students/{student}', [CoordinatorStudentController::class, 'destroy'])->whereNumber('student');
             Route::patch('/students/{student}/status', [CoordinatorStudentController::class, 'status'])->whereNumber('student');

@@ -17,7 +17,9 @@ class StudentController extends Controller
 {
     public function store(SaveStudentRequest $request, CoordinatorStudentService $service): JsonResponse
     {
-        return response()->json(['success' => true, 'data' => StudentResource::make($service->save($request->user(), $request->validated()))], 201);
+        $student = $service->save($request->user(), $request->validated());
+
+        return response()->json(['success' => true, 'message' => $student->credentialsEmailSent ? 'Estudiante registrado. Credenciales enviadas por correo.' : 'Estudiante registrado, pero no se pudo enviar el correo. Puede ingresar con su correo y número de identificación; deberá cambiar la contraseña.', 'credentials_email_sent' => $student->credentialsEmailSent, 'data' => StudentResource::make($student)], 201);
     }
 
     public function update(SaveStudentRequest $request, int $student, CoordinatorStudentService $service): JsonResponse

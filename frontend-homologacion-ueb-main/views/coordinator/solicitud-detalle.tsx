@@ -40,7 +40,7 @@ type Comparacion = { id: number; asignatura_origen?: SubjectRef; asignatura_dest
 // ---------------------------------------------------------------------------
 
 function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; estado: string; onChanged: () => void }) {
-  const docs = useAsync(() => api<{ data: Documento[] }>(`/coordinator/solicitudes/${solicitudId}/documents`).then((r) => r.data), [solicitudId])
+  const docs = useAsync(() => api<{ data: Documento[] }>(`/coordinator/solicitudes/${solicitudId}/documents`).then((r) => r.data), [solicitudId, estado])
   const action = useAction()
   const [observing, setObserving] = useState<number | null>(null)
   const [observacion, setObservacion] = useState('')
@@ -93,9 +93,11 @@ function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; e
 // ---------------------------------------------------------------------------
 
 async function loadSubjects(query: Record<string, string | number>): Promise<(Asignatura & { malla: string })[]> {
-  const list = await api<Paginated<Malla>>('/coordinator/curricula', { query: { ...query, per_page: 100 } })
-  const details = await Promise.all(list.data.map((m) => api<{ data: Malla }>(`/coordinator/curricula/${m.id}`).then((r) => r.data)))
-  return details.flatMap((m) => (m.asignaturas ?? []).map((a) => ({ ...a, malla: m.nombre })))
+  const first = await api<Paginated<Malla>>('/coordinator/curricula', { query: { ...query, include_subjects: 1, per_page: 100 } })
+  const pages = await Promise.all(Array.from({ length: first.meta.last_page - 1 }, (_, i) =>
+    api<Paginated<Malla>>('/coordinator/curricula', { query: { ...query, include_subjects: 1, per_page: 100, page: i + 2 } })))
+  return [first, ...pages].flatMap((page) => page.data.flatMap((m) =>
+    (m.asignaturas ?? []).map((a) => ({ ...a, malla: m.nombre }))))
 }
 
 function Analisis({ s, onChanged }: { s: Detalle; onChanged: () => void }) {
@@ -164,7 +166,7 @@ function Analisis({ s, onChanged }: { s: Detalle; onChanged: () => void }) {
       ) : <Empty>No hay comparaciones registradas.</Empty>}
 
       {enProceso && !s.resultado && (
-        subjects.loading ? <Loading text="Cargando mallas..." /> : (origen.length === 0 || destino.length === 0) ? (
+        subjects.loading || (subjects.refreshing && !origen.length && !destino.length) ? <Loading text="Cargando mallas..." /> : (origen.length === 0 || destino.length === 0) ? (
           <div className="api-info">
             Para comparar necesitas {origen.length === 0 && <>una <strong>malla de origen</strong> del estudiante con asignaturas</>}{origen.length === 0 && destino.length === 0 && ' y '}{destino.length === 0 && <>una <strong>malla institucional activa</strong> de {s.carrera?.nombre} con asignaturas</>}. <a href={href('mallas')}>Ir a Mallas curriculares</a>
           </div>
@@ -278,8 +280,7 @@ function CambioEstado({ s, onDone }: { s: Detalle; onDone: () => void }) {
 
 export function CoordinatorSolicitudDetalle({ id }: { id: number }) {
   const detail = useAsync(() => api<{ data: Detalle }>(`/coordinator/solicitudes/${id}`).then((r) => r.data), [id])
-  const [version, setVersion] = useState(0)
-  const refresh = () => { detail.reload(); setVersion((v) => v + 1) }
+  const refresh = () => { void detail.reload() }
 
   if (detail.loading && !detail.data) return <Loading />
   if (!detail.data) return <><PageHeader title={`Solicitud #${id}`} back="solicitudes" /><Alert error={detail.error instanceof ApiError && detail.error.status === 404 ? new Error('La solicitud no existe o no pertenece a tus carreras.') : detail.error} onRetry={detail.reload} /></>
@@ -289,6 +290,8 @@ export function CoordinatorSolicitudDetalle({ id }: { id: number }) {
   return (
     <>
       <PageHeader back="solicitudes" kicker={`SOLICITUD #${s.id}`} title={s.estudiante?.nombres_completos ?? `Solicitud #${s.id}`} subtitle={s.tramite ? `${s.tramite.tipo_tramite.nombre} · ${s.tramite.tipo_proceso.nombre}` : undefined} actions={<StatusPill estado={estado} />} />
+      <Alert error={detail.error} onRetry={detail.reload} />
+      {detail.refreshing && <p className="muted" role="status">Actualizando expediente…</p>}
       {estado === 'pendiente' && <div className="api-info">El estudiante todavía no envía esta solicitud a revisión.</div>}
       <div className="grid-2">
         <Panel title="Expediente">
@@ -298,9 +301,9 @@ export function CoordinatorSolicitudDetalle({ id }: { id: number }) {
           <Timeline items={(s.historial_estados ?? []).slice().reverse().map((h) => ({ id: h.id, estado: h.estado.nombre, observacion: h.observacion, fecha: formatDate(h.created_at, true), actor: h.usuario_responsable?.nombres_completos }))} />
         </Panel>
       </div>
-      <CambioEstado key={`estado-${version}`} s={s} onDone={refresh} />
-      <Documentos key={`docs-${version}`} solicitudId={s.id} estado={estado} onChanged={refresh} />
-      <Analisis key={`analisis-${version}`} s={s} onChanged={refresh} />
+      <CambioEstado s={s} onDone={refresh} />
+      <Documentos solicitudId={s.id} estado={estado} onChanged={refresh} />
+      <Analisis s={s} onChanged={refresh} />
       {estado === 'en_consejo' && !s.resolucion && <ResolucionForm endpoint={`/coordinator/solicitudes/${s.id}/resolution`} onDone={refresh} />}
       {s.resolucion && (
         <Panel title="Resolución">

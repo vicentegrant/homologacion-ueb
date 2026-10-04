@@ -26,6 +26,7 @@ type Detalle = {
   tramite?: { tipo_tramite: string; tipo_proceso: string }
   estado_actual: string | null
   puede_editar: boolean
+  puede_editar_procedencia?: boolean
   puede_enviar: boolean
   documentos?: Documento[]
   historial_estados?: { id: number; estado: string; observacion: string | null; created_at: string }[]
@@ -66,7 +67,7 @@ export function StudentSolicitudDetalle({ id }: { id: number }) {
           <KeyValue items={[
             ['Carrera de destino', s.carrera?.nombre],
             ['Coordinador', s.coordinador?.nombres_completos],
-            ['Procedencia', procedencia === null ? <>{s.procedencia_estudios} {s.puede_editar && <button className="link-button" onClick={() => setProcedencia(s.procedencia_estudios)}>Editar</button>}</> : (
+            ['Procedencia', procedencia === null ? <>{s.procedencia_estudios} {(s.puede_editar_procedencia ?? s.puede_editar) && <button className="link-button" onClick={() => setProcedencia(s.procedencia_estudios)}>Editar</button>}</> : (
               <span className="inline-edit"><input value={procedencia} maxLength={255} onChange={(e) => setProcedencia(e.target.value)} /><button className="btn btn-primary" onClick={guardarProcedencia} disabled={action.busy}>Guardar</button><button className="btn btn-ghost" onClick={() => setProcedencia(null)}>Cancelar</button></span>
             )],
             ['Creada', formatDate(s.created_at, true)],
