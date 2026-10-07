@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { ArrowRight, Search } from 'lucide-react'
+import { ArrowRight, Search, ClipboardCheck, GraduationCap } from 'lucide-react'
 import { api, Paginated, SolicitudResumen } from '@/lib/api'
 import { estadoLabels, formatDate } from '@/lib/format'
 import { href, navigate } from '@/lib/router'
@@ -22,7 +22,7 @@ export function SolicitudesList({ base, careers }: { base: '/admin' | '/coordina
 
   return (
     <>
-      <PageHeader kicker="EXPEDIENTES" title="Solicitudes" subtitle={base === '/coordinator' ? 'Solicitudes de las carreras que coordinas.' : 'Todas las solicitudes del sistema.'} />
+      <PageHeader icon={ClipboardCheck} kicker="EXPEDIENTES" title="Solicitudes" subtitle={base === '/coordinator' ? 'Solicitudes de las carreras que coordinas.' : 'Todas las solicitudes del sistema.'} />
       <Panel>
         <form className="toolbar" onSubmit={search}>
           <div className="search-input"><Search size={15} /><input placeholder="Buscar por estudiante" value={draft} onChange={(e) => setDraft(e.target.value)} /></div>
@@ -58,27 +58,28 @@ export function SolicitudesList({ base, careers }: { base: '/admin' | '/coordina
   )
 }
 
-type Estudiante = { id: number; nombres_completos: string; cedula: string; email: string; numero_celular: string | null; cuenta_activa: boolean }
+type Estudiante = { id: number; nombres_completos: string; cedula: string; email: string; numero_celular: string | null; cuenta_activa: boolean; procesos_registrados?: number; procesos_finalizados?: number }
 
 export function EstudiantesList({ base }: { base: '/admin' | '/coordinator' }) {
+  const [provenance, setProvenance] = useState('')
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
   const [page, setPage] = useState(1)
-  const list = useAsync(() => api<Paginated<Estudiante>>(`${base}/students`, { query: { search, page } }), [base, search, page])
+  const list = useAsync(() => api<Paginated<Estudiante>>(`${base}/students`, { query: { search, procedencia: provenance, sort: "apellidos", page } }), [base, search, provenance, page])
 
   return (
     <>
-      <PageHeader kicker="COMUNIDAD" title="Estudiantes" subtitle={base === '/coordinator' ? 'Estudiantes asignados a tus carreras.' : 'Estudiantes registrados en el sistema.'} />
+      <PageHeader icon={GraduationCap} kicker="COMUNIDAD" title="Estudiantes" subtitle={base === '/coordinator' ? 'Estudiantes asignados a tus carreras.' : 'Estudiantes registrados en el sistema.'} />
       <Panel>
         <form className="toolbar" onSubmit={(e) => { e.preventDefault(); setSearch(draft); setPage(1) }}>
           <div className="search-input"><Search size={15} /><input placeholder="Nombre, cédula o correo" value={draft} onChange={(e) => setDraft(e.target.value)} /></div>
-          <button className="btn btn-outline">Buscar</button>
+          <select aria-label="Procedencia de estudiantes" value={provenance} onChange={e=>{setProvenance(e.target.value);setPage(1)}}><option value="">Todas las procedencias</option><option value="interna">Estudios de origen en la UEB</option><option value="externa">Otra institución</option></select><button className="btn btn-outline">Buscar</button>
         </form>
         <Alert error={list.error} onRetry={list.reload} />
         {list.loading && !list.data ? <Loading /> : list.data?.data.length ? (
           <div className="table-wrap"><table className="data-table">
-            <thead><tr><th>Nombre</th><th>Cédula</th><th>Correo</th><th>Celular</th><th>Cuenta</th></tr></thead>
-            <tbody>{list.data.data.map((s) => <tr key={s.id}><td><strong>{s.nombres_completos}</strong></td><td>{s.cedula}</td><td>{s.email}</td><td>{s.numero_celular ?? '—'}</td><td><span className={`badge ${s.cuenta_activa ? 'badge-ok' : 'badge-off'}`}>{s.cuenta_activa ? 'Activa' : 'Inactiva'}</span></td></tr>)}</tbody>
+            <thead><tr><th>Nombre</th><th>Cédula</th><th>Correo</th><th>Celular</th><th>Procesos registrados</th><th>Cuenta</th></tr></thead>
+            <tbody>{list.data.data.map((s) => <tr key={s.id}><td><strong>{s.nombres_completos}</strong></td><td>{s.cedula}</td><td>{s.email}</td><td>{s.numero_celular ?? '—'}</td><td>{s.procesos_registrados ?? 0}<small className="cell-description">{s.procesos_finalizados ?? 0} finalizados</small></td><td><span className={`badge ${s.cuenta_activa ? 'badge-ok' : 'badge-off'}`}>{s.cuenta_activa ? 'Activa' : 'Inactiva'}</span></td></tr>)}</tbody>
           </table></div>
         ) : <Empty>No se encontraron estudiantes.</Empty>}
         <Pager meta={list.data?.meta} onPage={setPage} />

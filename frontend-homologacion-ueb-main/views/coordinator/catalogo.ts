@@ -8,15 +8,9 @@ export type CoordinatorCatalogo = {
   transiciones: Record<string, string[]>
 }
 
-let cache: Promise<CoordinatorCatalogo> | null = null
-
 export function getCoordinatorCatalogo(refresh = false) {
-  if (!cache || refresh) {
-    cache = api<{ data: CoordinatorCatalogo }>('/coordinator/catalogo').then((r) => r.data)
-    cache.catch(() => { cache = null })
-  }
-  return cache
+  return api<{ data: CoordinatorCatalogo }>('/coordinator/catalogo', { fresh: refresh }).then((r) => r.data)
 }
 
-export type Asignatura = { id: number; codigo_asignatura: string; nombre_asignatura: string; numero_creditos: number; nivel_ciclo: string; hr_carga_horaria: number; malla_curricular_id: number }
+export type Asignatura = { id: number; codigo_asignatura: string; nombre_asignatura: string; numero_creditos: number; nivel_ciclo: string; malla_curricular_id: number }
 export type Malla = { id: number; nombre: string; tipo: 'institucional' | 'origen'; activa: boolean; carrera?: { id: number; nombre: string } | null; estudiante?: { id: number; nombres_completos: string } | null; asignaturas?: Asignatura[] }

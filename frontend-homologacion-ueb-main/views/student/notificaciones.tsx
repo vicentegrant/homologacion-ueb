@@ -1,5 +1,7 @@
 'use client'
 
+import { Bell } from 'lucide-react'
+
 import { useState } from 'react'
 import { api, Paginated } from '@/lib/api'
 import { formatDate } from '@/lib/format'
@@ -26,7 +28,7 @@ export function StudentNotificaciones() {
 
   return (
     <>
-      <PageHeader kicker="AVISOS" title="Notificaciones" subtitle={list.data ? `${list.data.sin_leer} sin leer` : undefined} />
+      <PageHeader icon={Bell} kicker="AVISOS" title="Notificaciones" subtitle={list.data ? `${list.data.sin_leer} sin leer` : undefined} />
       <Panel title="Bandeja" actions={<label className="check-inline"><input type="checkbox" checked={soloPendientes} onChange={(e) => { setSoloPendientes(e.target.checked); setPage(1) }} /> Solo sin leer</label>}>
         <Alert error={list.error ?? action.error} onRetry={list.reload} />
         {list.loading && !list.data ? <Loading /> : list.data?.data.length ? (

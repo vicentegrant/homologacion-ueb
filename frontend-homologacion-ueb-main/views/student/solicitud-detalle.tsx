@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { Download, Send, Upload } from 'lucide-react'
-import { api, download, upload } from '@/lib/api'
+import { Download, Check, FileText, CircleAlert, Clock3 } from 'lucide-react'
+import { api, download } from '@/lib/api'
+import { tramiteLabel } from '@/lib/requirements'
 import { conclusionLabels, docEstadoLabels, formatDate } from '@/lib/format'
 import { Alert, Empty, KeyValue, Loading, PageHeader, Panel, StatusPill, Timeline, useAction, useAsync } from '@/components/app/ui'
 
 type Documento = {
+  requisito?: { id: number; nombre: string; descripcion?: string | null }
   id: number
-  requisito?: { id: number; nombre: string; descripcion: string | null }
   estado?: string
+  obligatorio: boolean
+  recibido_at?: string | null
   validez: boolean
   presentado: boolean
   download_url: string | null
@@ -18,76 +20,57 @@ type Documento = {
 
 type Detalle = {
   id: number
+  carrera_origen?: string | null
   procedencia_estudios: string
   carrera?: { id: number; nombre: string } | null
   coordinador?: { id: number; nombres_completos: string } | null
   tramite?: { tipo_tramite: string; tipo_proceso: string }
   estado_actual: string | null
   puede_editar: boolean
+  puede_editar_procedencia?: boolean
   puede_enviar: boolean
   documentos?: Documento[]
   historial_estados?: { id: number; estado: string; observacion: string | null; created_at: string }[]
-  resultado?: { conclusion_general: string; total_creditos_reconocidos: number } | null
+  resultado?: { conclusion_general: string; total_creditos_reconocidos: number; informe_download_url?: string | null } | null
   resolucion?: { numero_resolucion: string; fecha_aprobacion: string; download_url: string } | null
   created_at: string
 }
 
-function canUpload(solicitud: string | null, doc?: string) {
-  if (solicitud === 'pendiente') return doc === 'pendiente' || doc === 'presentado'
-  if (solicitud === 'observado') return doc === 'observado' || doc === 'pendiente'
-  return false
-}
 
 export function StudentSolicitudDetalle({ id }: { id: number }) {
   const detail = useAsync(() => api<{ data: Detalle }>(`/student/solicitudes/${id}`).then((r) => r.data), [id])
   const action = useAction()
-  const [procedencia, setProcedencia] = useState<string | null>(null)
 
   if (detail.loading && !detail.data) return <Loading />
-  if (!detail.data) return <><PageHeader title={`Solicitud #${id}`} back="solicitudes" /><Alert error={detail.error} onRetry={detail.reload} /></>
+  if (!detail.data) return <><PageHeader icon={FileText} title={`Solicitud #${id}`} back="solicitudes" /><Alert error={detail.error} onRetry={detail.reload} /></>
   const s = detail.data
   const docs = s.documentos ?? []
-  const completos = docs.every((d) => d.presentado)
-
-  async function subir(docId: number, file?: File | null) {
-    if (!file) return
-    await action.run(() => upload(`/student/solicitudes/${id}/documentos/${docId}`, { archivo: file }), 'Documento cargado.')
-    detail.reload()
-  }
-
-  async function enviar() {
-    const ok = await action.run(() => api(`/student/solicitudes/${id}/enviar`, { method: 'POST' }), 'Solicitud enviada a revisión.')
-    if (ok) detail.reload()
-  }
-
-  async function guardarProcedencia() {
-    const ok = await action.run(() => api(`/student/solicitudes/${id}`, { method: 'PATCH', body: { procedencia_estudios: procedencia } }), 'Procedencia actualizada.')
-    if (ok) { setProcedencia(null); detail.reload() }
-  }
+  const required = docs.filter(d=>d.obligatorio)
+  const validated = required.filter(d=>d.estado==='aprobado' && d.validez).length
+  const progress = required.length ? Math.floor(100*validated/required.length) : 0
 
   return (
     <>
-      <PageHeader back="solicitudes" kicker={`SOLICITUD #${s.id}`} title={s.tramite ? `${s.tramite.tipo_tramite} · ${s.tramite.tipo_proceso}` : `Solicitud #${s.id}`}
+      <PageHeader icon={FileText} back="solicitudes" kicker={`SOLICITUD #${s.id}`} title={s.tramite ? tramiteLabel(s.tramite) : `Solicitud #${s.id}`}
         actions={<>
           <StatusPill estado={s.estado_actual} />
-          {s.puede_enviar && <button className="btn btn-primary" onClick={enviar} disabled={action.busy || !completos} title={completos ? '' : 'Carga todos los documentos primero'}><Send size={15} /> {s.estado_actual === 'observado' ? 'Reenviar corrección' : 'Enviar a revisión'}</button>}
         </>} />
       <Alert error={action.error} message={action.message} />
-      {s.puede_enviar && !completos && <div className="api-info">Carga todos los documentos requeridos para poder enviar la solicitud. También necesitas antecedentes académicos registrados en tu perfil.</div>}
 
       <div className="grid-2">
         <Panel title="Datos de la solicitud">
           <KeyValue items={[
+            ['Universidad de origen', s.procedencia_estudios],
+            ['Carrera de origen', s.carrera_origen ?? 'Sin dato histórico'],
             ['Carrera de destino', s.carrera?.nombre],
             ['Coordinador', s.coordinador?.nombres_completos],
-            ['Procedencia', procedencia === null ? <>{s.procedencia_estudios} {s.puede_editar && <button className="link-button" onClick={() => setProcedencia(s.procedencia_estudios)}>Editar</button>}</> : (
-              <span className="inline-edit"><input value={procedencia} maxLength={255} onChange={(e) => setProcedencia(e.target.value)} /><button className="btn btn-primary" onClick={guardarProcedencia} disabled={action.busy}>Guardar</button><button className="btn btn-ghost" onClick={() => setProcedencia(null)}>Cancelar</button></span>
-            )],
+            ['Procedencia', s.procedencia_estudios],
             ['Creada', formatDate(s.created_at, true)],
           ]} />
         </Panel>
         <Panel title="Resultado">
           {s.resultado ? <KeyValue items={[['Conclusión', conclusionLabels[s.resultado.conclusion_general] ?? s.resultado.conclusion_general], ['Créditos reconocidos', s.resultado.total_creditos_reconocidos]]} /> : <Empty>El análisis académico aún no tiene resultado.</Empty>}
+          {s.resultado?.informe_download_url && <button className="btn btn-outline" onClick={() => action.run(() => download(s.resultado!.informe_download_url!, `informe-academico-${s.id}.pdf`))}><Download size={15} /> Descargar informe académico</button>}
           {s.resolucion && (
             <div className="resolution-box">
               <p>Resolución <strong>{s.resolucion.numero_resolucion}</strong> del {formatDate(s.resolucion.fecha_aprobacion)}</p>
@@ -97,31 +80,26 @@ export function StudentSolicitudDetalle({ id }: { id: number }) {
         </Panel>
       </div>
 
-      <Panel title="Documentos requeridos">
+      <Panel className="student-checklist" title="Mi checklist documental" actions={<span className="muted">Entrega y revisión presencial</span>}>
+        <div className="checklist-summary"><div className="checklist-score">{progress}%</div><div><strong>{validated} de {required.length} requisitos obligatorios validados</strong><p>Entrega tus documentos al coordinador. Aquí verás sus validaciones y los motivos de cualquier observación. Completar la documentación no equivale a aprobar la homologación.</p><progress aria-label="Progreso de documentos validados" value={progress} max={100}/></div></div>
         {docs.length === 0 ? <Empty>Esta solicitud no tiene requisitos configurados.</Empty> : (
-          <div className="doc-list">{docs.map((d) => (
-            <article key={d.id} className="doc-item">
+          <div className="doc-list">{docs.map((d, index) => (
+            <article key={d.id} className={`doc-item document-${d.estado ?? 'pendiente'}`}><span className="document-step">{index+1}</span>
               <div className="doc-main">
                 <strong>{d.requisito?.nombre ?? `Documento #${d.id}`}</strong>
-                {d.requisito?.descripcion && <p>{d.requisito.descripcion}</p>}
-                {d.observaciones?.length ? <p className="doc-observation">Observación: {d.observaciones[d.observaciones.length - 1].observacion}</p> : null}
+                {d.requisito?.descripcion && <p>{d.requisito.descripcion}</p>}<small className="muted">{d.obligatorio?'Obligatorio':'Complementario'}{d.recibido_at ? ` · Recibido el ${formatDate(d.recibido_at)}` : ' · Pendiente de entrega presencial'}</small>
+                {d.observaciones?.length ? <div className="doc-observation"><strong>Qué debes corregir</strong><p>{d.observaciones[d.observaciones.length - 1].observacion}</p></div> : null}
               </div>
-              <span className={`status ${d.estado === 'aprobado' ? 'approved' : d.estado === 'observado' ? '' : 'received'}`}><i />{docEstadoLabels[d.estado ?? ''] ?? d.estado}</span>
+              <span className={`status ${d.estado === 'aprobado' ? 'approved' : d.estado === 'observado' ? '' : 'received'}`}>{d.estado === 'aprobado' ? <span className="validated-check"><Check size={13} strokeWidth={3} aria-hidden="true" /></span> : d.estado === 'observado' ? <CircleAlert size={15} aria-hidden="true" /> : <Clock3 size={15} aria-hidden="true" />}{docEstadoLabels[d.estado ?? ''] ?? d.estado}</span>
               <div className="doc-actions">
-                {d.download_url && <button className="btn btn-ghost" onClick={() => action.run(() => download(d.download_url!, `${d.requisito?.nombre ?? 'documento'}.pdf`))}><Download size={14} /> Ver</button>}
-                {canUpload(s.estado_actual, d.estado) && (
-                  <label className="btn btn-outline file-button">
-                    <Upload size={14} /> {d.presentado ? 'Reemplazar' : 'Subir PDF'}
-                    <input type="file" accept="application/pdf" disabled={action.busy} onChange={(e) => { subir(d.id, e.target.files?.[0]); e.target.value = '' }} />
-                  </label>
-                )}
+
               </div>
             </article>
           ))}</div>
         )}
       </Panel>
 
-      <Panel title="Seguimiento">
+      <Panel className="request-tracking" title="Seguimiento de la solicitud" actions={<span className="tracking-label"><Clock3 size={15} aria-hidden="true" />Historial del proceso</span>}>
         <Timeline items={(s.historial_estados ?? []).slice().reverse().map((h) => ({ id: h.id, estado: h.estado, observacion: h.observacion, fecha: formatDate(h.created_at, true) }))} />
       </Panel>
     </>

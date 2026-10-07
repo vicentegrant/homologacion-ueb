@@ -1,3 +1,6 @@
+// Se utiliza la misma lista en los formularios del coordinador y del estudiante.
+export const academicCycles = ['Primer', 'Segundo', 'Tercer', 'Cuarto', 'Quinto', 'Sexto', 'Séptimo', 'Octavo', 'Noveno', 'Décimo'].map(cycle => `${cycle} ciclo / semestre`)
+
 export const estadoLabels: Record<string, string> = {
   pendiente: 'Pendiente',
   en_revision: 'En revisión',
@@ -6,13 +9,15 @@ export const estadoLabels: Record<string, string> = {
   aprobado: 'Aprobado',
   en_consejo: 'En Consejo',
   listo: 'Finalizado',
+  revisado: 'Revisado',
+  terminado: 'Terminado',
   rechazado: 'Rechazado',
 }
 
 export const docEstadoLabels: Record<string, string> = {
-  pendiente: 'Sin cargar',
-  presentado: 'Presentado',
-  aprobado: 'Aprobado',
+  pendiente: 'Pendiente de entrega',
+  presentado: 'Recibido',
+  aprobado: 'Validado',
   observado: 'Observado',
 }
 
@@ -28,7 +33,7 @@ export function estadoLabel(estado?: string | null) {
 }
 
 export function estadoClass(estado?: string | null) {
-  if (estado === 'aprobado' || estado === 'listo') return 'approved'
+  if (estado === 'aprobado' || estado === 'listo' || estado === 'terminado' || estado === 'revisado') return 'approved'
   if (estado === 'pendiente' || estado === 'en_revision' || estado === 'presentado') return 'received'
   if (estado === 'rechazado') return 'rejected'
   return ''

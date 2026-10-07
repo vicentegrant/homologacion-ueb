@@ -1,22 +1,24 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { Check, Download, FileText, Trash2, X } from 'lucide-react'
+import { Check, Download, FileText, X } from 'lucide-react'
 import { api, ApiError, download, Paginated, upload } from '@/lib/api'
 import { conclusionLabels, docEstadoLabels, estadoLabel, formatDate } from '@/lib/format'
 import { href } from '@/lib/router'
+import { tramiteLabel } from '@/lib/requirements'
 import { Alert, Empty, Field, fieldError, KeyValue, Loading, PageHeader, Panel, StatusPill, Timeline, useAction, useAsync } from '@/components/app/ui'
-import { Asignatura, getCoordinatorCatalogo, Malla } from './catalogo'
+import { Malla } from './catalogo'
 
 type Detalle = {
   id: number
+  carrera_origen?: string | null
   procedencia_estudios: string
   carrera?: { id: number; nombre: string } | null
-  estudiante?: { id: number; nombres_completos: string; cedula: string; email: string }
+  estudiante?: { id: number; nombres_completos: string; cedula: string; email: string; tiene_proceso_previo?: boolean; detalle_proceso_previo?: string | null; procesos_anteriores?: number; antecedente_academico?: {universidad_origen: string; carrera_origen: string} }
   tramite?: { tipo_tramite: { nombre: string }; tipo_proceso: { nombre: string } }
   estado_actual?: { id: number; nombre: string } | null
   historial_estados?: { id: number; estado: { nombre: string }; observacion: string | null; etapa_origen: string | null; usuario_responsable: { nombres_completos: string } | null; created_at: string }[]
-  resultado?: { conclusion_general: string; total_creditos_reconocidos: number; informe_tecnico_disponible: boolean; informe_generado_at: string | null } | null
+  resultado?: { conclusion_general: string; total_creditos_reconocidos: number; total_creditos_destino?: number | null; porcentaje_cobertura?: number | null; informe_tecnico_disponible: boolean; informe_generado_at: string | null } | null
   resolucion?: { numero_resolucion: string; fecha_aprobacion: string; download_url: string } | null
   created_at: string
 }
@@ -25,6 +27,8 @@ type Documento = {
   id: number
   requisito?: { nombre: string; descripcion: string | null }
   estado?: string
+  obligatorio: boolean
+  recibido_at?: string | null
   validez: boolean
   presentado: boolean
   download_url: string | null
@@ -32,41 +36,47 @@ type Documento = {
   verificaciones?: { id: number; estado: boolean; coordinador: { nombres_completos: string } | null; updated_at: string }[]
 }
 
-type SubjectRef = { id: number; codigo: string; nombre: string; creditos: number; nivel_ciclo: string; malla?: { nombre: string } }
-type Comparacion = { id: number; asignatura_origen?: SubjectRef; asignatura_destino?: SubjectRef; porcentaje_coincidencia: number; observacion: string | null }
+type SubjectRef = { id: number; codigo: string; nombre: string; creditos: number; nivel_ciclo: string; malla?: { id: number; nombre: string } }
+type Comparacion = { id: number; asignatura_origen?: SubjectRef; asignaturas_origen?: SubjectRef[]; creditos_origen_total?: number; asignatura_destino?: SubjectRef; porcentaje_coincidencia: number; observacion: string | null }
 
 // ---------------------------------------------------------------------------
 
 function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; estado: string; onChanged: () => void }) {
-  const docs = useAsync(() => api<{ data: Documento[] }>(`/coordinator/solicitudes/${solicitudId}/documents`).then((r) => r.data), [solicitudId])
+  const docs = useAsync(() => api<{ data: Documento[] }>(`/coordinator/solicitudes/${solicitudId}/documents`).then((r) => r.data), [solicitudId, estado])
   const action = useAction()
   const [observing, setObserving] = useState<number | null>(null)
   const [observacion, setObservacion] = useState('')
-  const editable = estado === 'en_revision' || estado === 'observado'
+  const editable = ['pendiente','en_revision','observado'].includes(estado)
 
-  async function review(doc: Documento, nuevo: 'aprobado' | 'observado') {
-    const ok = await action.run(() => api(`/coordinator/documents/${doc.id}/review`, { method: 'PATCH', body: nuevo === 'observado' ? { estado: nuevo, observacion } : { estado: nuevo } }), nuevo === 'aprobado' ? 'Documento aprobado.' : 'Observación registrada; se notificó al estudiante.')
+  async function review(doc: Documento, nuevo: 'presentado' | 'aprobado' | 'observado') {
+    const ok = await action.run(() => api(`/coordinator/documents/${doc.id}/review`, { method: 'PATCH', body: nuevo === 'observado' ? { estado: nuevo, observacion } : { estado: nuevo } }), nuevo === 'aprobado' ? 'Documento validado.' : nuevo === 'presentado' ? 'Entrega presencial registrada.' : 'Observación registrada; se notificó al estudiante.')
     if (ok) { setObserving(null); setObservacion(''); docs.reload(); onChanged() }
   }
 
-  async function verify(doc: Documento, value: boolean) {
-    const ok = await action.run(() => api(`/coordinator/documents/${doc.id}/verification`, { method: 'POST', body: { estado: value } }), value ? 'Verificación positiva registrada.' : 'Verificación negativa registrada.')
-    if (ok) docs.reload()
+  // Validar = registrar la recepción (si falta) y validar, en un solo paso.
+  async function validar(doc: Documento) {
+    const ok = await action.run(async () => {
+      if (!(doc.recibido_at && doc.estado === 'presentado')) {
+        await api(`/coordinator/documents/${doc.id}/review`, { method: 'PATCH', body: { estado: 'presentado' } })
+      }
+      return api(`/coordinator/documents/${doc.id}/review`, { method: 'PATCH', body: { estado: 'aprobado' } })
+    }, 'Documento validado.')
+    if (ok) { docs.reload(); onChanged() }
   }
 
   return (
-    <Panel title="Documentación" actions={editable ? <span className="muted">Aprueba y verifica cada documento para pasar a análisis académico.</span> : null}>
+    <Panel title="Documentación" actions={editable ? <span className="muted">Valida cada documento o usa Observar si debe corregirse.</span> : null}>
       <Alert error={docs.error ?? action.error} message={action.message} />
       {docs.loading && !docs.data ? <Loading /> : !docs.data?.length ? <Empty>Sin documentos requeridos.</Empty> : (
         <div className="doc-list">{docs.data.map((d) => {
-          const lastVerification = d.verificaciones?.[d.verificaciones.length - 1]
+          const validado = d.estado === 'aprobado'
           return (
-            <article key={d.id} className="doc-item">
+            <article key={d.id} className="doc-item" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
               <div className="doc-main">
                 <strong>{d.requisito?.nombre ?? `Documento #${d.id}`}</strong>
                 <p>
-                  {d.presentado ? 'Archivo cargado' : 'Sin archivo'}
-                  {lastVerification ? ` · Verificación ${lastVerification.estado ? 'positiva' : 'negativa'}` : d.presentado ? ' · Sin verificar' : ''}
+                  {d.recibido_at ? `Recibido presencialmente el ${formatDate(d.recibido_at)}` : 'Pendiente de recepción presencial'}
+                  {d.obligatorio ? ' · Obligatorio' : ' · Complementario'}
                 </p>
                 {d.observaciones?.map((o) => <p key={o.id} className="doc-observation">{formatDate(o.created_at)}: {o.observacion}</p>)}
                 {observing === d.id && (
@@ -76,14 +86,16 @@ function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; e
                   </div>
                 )}
               </div>
-              <span className={`status ${d.estado === 'aprobado' ? 'approved' : d.estado === 'observado' ? '' : 'received'}`}><i />{docEstadoLabels[d.estado ?? ''] ?? d.estado}</span>
               <div className="doc-actions">
-                {d.download_url && <button className="btn btn-ghost" onClick={() => action.run(() => download(d.download_url!, `${d.requisito?.nombre ?? 'documento'}.pdf`))}><Download size={14} /> Ver</button>}
-                {editable && d.presentado && d.estado !== 'observado' && <>
-                  {d.estado !== 'aprobado' && <button className="btn btn-outline" disabled={action.busy} onClick={() => review(d, 'aprobado')}><Check size={14} /> Aprobar</button>}
+                {editable && <>
+                  <button type="button" className="btn btn-outline" aria-pressed={validado} disabled={validado || action.busy} onClick={() => validar(d)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, ...(validado ? { color: '#076a4e', borderColor: '#9fd6bf', background: '#e8f6ef', opacity: 1 } : {}) }}>
+                    <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: 5, display: 'grid', placeItems: 'center', color: '#fff', border: `2px solid ${validado ? '#13835e' : '#7d92ad'}`, background: validado ? '#13835e' : '#fff' }}>
+                      {validado && <Check size={12} strokeWidth={3} />}
+                    </span>
+                    {validado ? 'Validado' : 'Validar'}
+                  </button>
                   <button className="btn btn-ghost" disabled={action.busy} onClick={() => { setObserving(d.id); setObservacion('') }}>Observar</button>
-                  <button className="btn btn-ghost" disabled={action.busy} title="Verificación positiva" onClick={() => verify(d, true)}><Check size={14} /> Verificar</button>
-                  <button className="btn btn-ghost" disabled={action.busy} title="Verificación negativa" onClick={() => verify(d, false)}><X size={14} /></button>
                 </>}
               </div>
             </article>
@@ -96,123 +108,95 @@ function Documentos({ solicitudId, estado, onChanged }: { solicitudId: number; e
 
 // ---------------------------------------------------------------------------
 
-async function loadSubjects(query: Record<string, string | number>): Promise<(Asignatura & { malla: string })[]> {
-  const list = await api<Paginated<Malla>>('/coordinator/curricula', { query: { ...query, per_page: 100 } })
-  const details = await Promise.all(list.data.map((m) => api<{ data: Malla }>(`/coordinator/curricula/${m.id}`).then((r) => r.data)))
-  return details.flatMap((m) => (m.asignaturas ?? []).map((a) => ({ ...a, malla: m.nombre })))
+async function loadCurricula(query: Record<string, string | number>) {
+  const first = await api<Paginated<Malla>>('/coordinator/curricula', { query: { ...query, per_page: 100 } })
+  const pages = await Promise.all(Array.from({ length: first.meta.last_page - 1 }, (_, i) => api<Paginated<Malla>>('/coordinator/curricula', { query: { ...query, per_page: 100, page: i + 2 } })))
+  return [first, ...pages].flatMap(page => page.data)
 }
 
 function Analisis({ s, onChanged }: { s: Detalle; onChanged: () => void }) {
   const estado = s.estado_actual?.nombre ?? ''
-  const enProceso = estado === 'en_proceso'
-  const comps = useAsync(() => api<{ data: Comparacion[] }>(`/coordinator/solicitudes/${s.id}/comparisons`).then((r) => r.data), [s.id])
-  const subjects = useAsync(async () => {
-    if (!enProceso || !s.estudiante || !s.carrera) return { origen: [], destino: [] }
+  const editable = estado === 'en_proceso'
+  const comps = useAsync(() => api<{ data: Comparacion[] }>(`/coordinator/solicitudes/${s.id}/comparisons`).then(r => r.data), [s.id, estado])
+  const curricula = useAsync(async () => {
+    if (!editable || !s.estudiante || !s.carrera) return { origen: [], destino: [] }
     const [origen, destino] = await Promise.all([
-      loadSubjects({ tipo: 'origen', estudiante: s.estudiante.id }),
-      loadSubjects({ tipo: 'institucional', carrera: s.carrera.id, activa: 1 }),
+      loadCurricula({ tipo: 'origen', estudiante: s.estudiante.id, activa: 1, include_subjects: 1 }),
+      loadCurricula({ tipo: 'institucional', carrera: s.carrera.id, activa: 1, include_subjects: 1 }),
     ])
-    return { origen, destino }
-  }, [s.id, enProceso])
+    return { origen: origen.filter(m => m.asignaturas?.length), destino: destino.filter(m => m.asignaturas?.some(a => a.numero_creditos > 0)) }
+  }, [s.id, editable])
   const action = useAction()
-  const [form, setForm] = useState({ asignatura_origen_id: '', asignatura_destino_id: '', porcentaje_coincidencia: '', observacion: '' })
-  const [result, setResult] = useState({ conclusion_general: 'total', total_creditos_reconocidos: '' })
-
-  async function addComparison(event: FormEvent) {
+  const [pair, setPair] = useState({ origen: '', destino: '' })
+  const [editing, setEditing] = useState<number | null>(null)
+  const [origins, setOrigins] = useState<number[]>([])
+  const [target, setTarget] = useState('')
+  const [percentage, setPercentage] = useState('')
+  const [note, setNote] = useState('')
+  const [conclusionNote, setConclusionNote] = useState('')
+  const rows = comps.data ?? []
+  const sourcesOf = (c: Comparacion) => c.asignaturas_origen?.length ? c.asignaturas_origen : c.asignatura_origen ? [c.asignatura_origen] : []
+  const selectedOrigin = pair.origen || String(rows[0]?.asignatura_origen?.malla?.id ?? '')
+  const selectedDestination = pair.destino || String(rows[0]?.asignatura_destino?.malla?.id ?? '')
+  const originCurriculum = curricula.data?.origen.find(m => m.id === Number(selectedOrigin))
+  const destinationCurriculum = curricula.data?.destino.find(m => m.id === Number(selectedDestination))
+  const sources = originCurriculum?.asignaturas ?? []
+  const destinations = destinationCurriculum?.asignaturas ?? []
+  const otherRows = rows.filter(c => c.id !== editing)
+  const usedOrigins = new Set(otherRows.flatMap(c => sourcesOf(c).map(a => a.id)))
+  const usedTargets = new Set(otherRows.map(c => c.asignatura_destino?.id))
+  const credits = sources.filter(a => origins.includes(a.id)).reduce((sum, a) => sum + Number(a.numero_creditos), 0)
+  const destinationCredits = Number(destinations.find(a => a.id === Number(target))?.numero_creditos ?? 0)
+  function clearForm() { setEditing(null); setOrigins([]); setTarget(''); setPercentage(''); setNote('') }
+  async function save(event: FormEvent) {
     event.preventDefault()
-    const ok = await action.run(() => api(`/coordinator/solicitudes/${s.id}/comparisons`, { method: 'POST', body: {
-      asignatura_origen_id: Number(form.asignatura_origen_id), asignatura_destino_id: Number(form.asignatura_destino_id),
-      porcentaje_coincidencia: Number(form.porcentaje_coincidencia), observacion: form.observacion || null,
-    } }), 'Comparación registrada.')
-    if (ok) { setForm({ asignatura_origen_id: '', asignatura_destino_id: '', porcentaje_coincidencia: '', observacion: '' }); comps.reload() }
+    const ok = await action.run(() => api(editing ? `/coordinator/comparisons/${editing}` : `/coordinator/solicitudes/${s.id}/comparisons`, { method: editing ? 'PUT' : 'POST', body: { asignaturas_origen_ids: origins, asignatura_destino_id: Number(target), porcentaje_coincidencia: Number(percentage), observacion: note || null } }), 'Equivalencia manual guardada. La revisión continúa abierta.')
+    if (ok) { clearForm(); await comps.reload(); onChanged() }
   }
-
-  async function removeComparison(id: number) {
-    const ok = await action.run(() => api(`/coordinator/comparisons/${id}`, { method: 'DELETE' }), 'Comparación eliminada.')
-    if (ok) comps.reload()
+  async function remove(id: number) {
+    const ok = await action.run(() => api(`/coordinator/comparisons/${id}`, { method: 'DELETE' }), 'Equivalencia eliminada.')
+    if (ok) { clearForm(); await comps.reload(); onChanged() }
   }
-
-  async function saveResult(event: FormEvent) {
+  async function finish(event: FormEvent) {
     event.preventDefault()
-    const ok = await action.run(() => api(`/coordinator/solicitudes/${s.id}/result`, { method: 'POST', body: { conclusion_general: result.conclusion_general, total_creditos_reconocidos: Number(result.total_creditos_reconocidos) } }), 'Resultado registrado.')
-    if (ok) onChanged()
+    const ok = await action.run(() => api(`/coordinator/solicitudes/${s.id}/compare-curricula`, { method: 'POST', body: { malla_origen_id: Number(selectedOrigin), malla_destino_id: Number(selectedDestination), observacion: conclusionNote || null } }), 'Análisis manual finalizado. Ya puedes generar el informe académico.')
+    if (ok) { await comps.reload(); onChanged() }
   }
-
   async function generateReport() {
-    const ok = await action.run(() => api(`/coordinator/solicitudes/${s.id}/technical-report`, { method: 'POST' }), 'Informe técnico generado.')
+    const ok = await action.run(() => api(`/coordinator/solicitudes/${s.id}/technical-report`, { method: 'POST' }), 'Informe académico generado. Solicitud terminada.')
     if (ok) onChanged()
   }
-
-  const origen = subjects.data?.origen ?? []
-  const destino = subjects.data?.destino ?? []
-  const showSection = enProceso || (comps.data?.length ?? 0) > 0 || s.resultado
-
-  if (!showSection) return null
-
-  return (
-    <Panel title="Análisis académico">
-      <Alert error={comps.error ?? subjects.error ?? action.error} message={action.message} />
-      {comps.data?.length ? (
-        <div className="table-wrap"><table className="data-table">
-          <thead><tr><th>Asignatura de origen</th><th>Asignatura UEB</th><th>Créditos</th><th>Coincidencia</th><th>Observación</th>{enProceso && <th />}</tr></thead>
-          <tbody>{comps.data.map((c) => (
-            <tr key={c.id}>
-              <td><strong>{c.asignatura_origen?.codigo}</strong> {c.asignatura_origen?.nombre}</td>
-              <td><strong>{c.asignatura_destino?.codigo}</strong> {c.asignatura_destino?.nombre}</td>
-              <td>{c.asignatura_origen?.creditos} → {c.asignatura_destino?.creditos}</td>
-              <td>{Number(c.porcentaje_coincidencia)}%</td><td>{c.observacion ?? '—'}</td>
-              {enProceso && <td><button className="btn btn-ghost" onClick={() => removeComparison(c.id)} aria-label="Eliminar comparación"><Trash2 size={14} /></button></td>}
-            </tr>
-          ))}</tbody>
-        </table></div>
-      ) : <Empty>No hay comparaciones registradas.</Empty>}
-
-      {enProceso && !s.resultado && (
-        subjects.loading ? <Loading text="Cargando mallas..." /> : (origen.length === 0 || destino.length === 0) ? (
-          <div className="api-info">
-            Para comparar necesitas {origen.length === 0 && <>una <strong>malla de origen</strong> del estudiante con asignaturas</>}{origen.length === 0 && destino.length === 0 && ' y '}{destino.length === 0 && <>una <strong>malla institucional activa</strong> de {s.carrera?.nombre} con asignaturas</>}. <a href={href('mallas')}>Ir a Mallas curriculares</a>
-          </div>
-        ) : (
-          <form className="form-grid" onSubmit={addComparison}>
-            <Field label="Asignatura de origen" error={fieldError(action.error, 'asignatura_origen_id')}>
-              <select required value={form.asignatura_origen_id} onChange={(e) => setForm({ ...form, asignatura_origen_id: e.target.value })}><option value="">Selecciona…</option>{origen.map((a) => <option key={a.id} value={a.id}>{a.codigo_asignatura} · {a.nombre_asignatura} ({a.numero_creditos} cr.)</option>)}</select>
-            </Field>
-            <Field label="Asignatura UEB" error={fieldError(action.error, 'asignatura_destino_id')}>
-              <select required value={form.asignatura_destino_id} onChange={(e) => setForm({ ...form, asignatura_destino_id: e.target.value })}><option value="">Selecciona…</option>{destino.map((a) => <option key={a.id} value={a.id}>{a.codigo_asignatura} · {a.nombre_asignatura} ({a.numero_creditos} cr.)</option>)}</select>
-            </Field>
-            <Field label="Coincidencia (%)" error={fieldError(action.error, 'porcentaje_coincidencia')}><input required type="number" min={0} max={100} step="0.01" value={form.porcentaje_coincidencia} onChange={(e) => setForm({ ...form, porcentaje_coincidencia: e.target.value })} /></Field>
-            <Field label="Observación (opcional)"><input maxLength={2000} value={form.observacion} onChange={(e) => setForm({ ...form, observacion: e.target.value })} /></Field>
-            <div className="form-actions"><button className="btn btn-outline" disabled={action.busy}>Agregar comparación</button></div>
-          </form>
-        )
-      )}
-
-      {enProceso && !s.resultado && (comps.data?.length ?? 0) > 0 && (
-        <form className="form-grid result-form" onSubmit={saveResult}>
-          <Field label="Conclusión general" error={fieldError(action.error, 'conclusion_general')}>
-            <select value={result.conclusion_general} onChange={(e) => setResult({ ...result, conclusion_general: e.target.value })}>{Object.entries(conclusionLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-          </Field>
-          <Field label="Créditos reconocidos" error={fieldError(action.error, 'total_creditos_reconocidos')}><input required type="number" min={0} value={result.total_creditos_reconocidos} onChange={(e) => setResult({ ...result, total_creditos_reconocidos: e.target.value })} /></Field>
-          <div className="form-actions"><button className="btn btn-primary" disabled={action.busy}>Registrar resultado</button></div>
-          <p className="muted form-note">Total o parcial cambia la solicitud a Aprobado; Rechazada la cambia a Rechazado.</p>
-        </form>
-      )}
-
-      {s.resultado && (
-        <div className="result-summary">
-          <KeyValue items={[
-            ['Conclusión', conclusionLabels[s.resultado.conclusion_general] ?? s.resultado.conclusion_general],
-            ['Créditos reconocidos', s.resultado.total_creditos_reconocidos],
-            ['Informe técnico', s.resultado.informe_tecnico_disponible ? `Generado ${formatDate(s.resultado.informe_generado_at, true)}` : 'No generado'],
-          ]} />
-          <div className="page-actions">
-            {estado === 'aprobado' && !s.resultado.informe_tecnico_disponible && <button className="btn btn-primary" disabled={action.busy} onClick={generateReport}><FileText size={15} /> Generar informe técnico</button>}
-            {s.resultado.informe_tecnico_disponible && <button className="btn btn-outline" onClick={() => action.run(() => download(`/coordinator/solicitudes/${s.id}/technical-report`, `informe-tecnico-${s.id}.pdf`))}><Download size={15} /> Descargar informe</button>}
-          </div>
-        </div>
-      )}
-    </Panel>
-  )
+  if (!editable && !s.resultado && !rows.length) return null
+  return <Panel title="Análisis académico manual">
+    <Alert error={comps.error ?? curricula.error ?? action.error} message={action.message} />
+    {editable && (curricula.loading ? <Loading text="Cargando mallas..." /> : !curricula.data?.origen.length || !curricula.data.destino.length ? <div className="api-info">Antes de proceder, carga una malla de origen del estudiante y una malla institucional de destino, ambas activas y con materias y créditos. <a href={href('mallas')}>Ir a Mallas curriculares</a></div> : <>
+      <div className="analysis-guide"><strong>1. Selecciona las mallas · 2. Registra equivalencias · 3. Finaliza la revisión</strong><p>El coordinador evalúa contenidos y asigna el porcentaje de coincidencia. Puedes combinar varias materias de origen para una de destino. No se decide por el nombre de las materias.</p></div>
+      <div className="form-grid">
+        <Field label="Malla de origen"><select required disabled={rows.length > 0} value={selectedOrigin} onChange={e => { setPair({ ...pair, origen: e.target.value }); clearForm() }}><option value="">Selecciona una malla</option>{curricula.data?.origen.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></Field>
+        <Field label="Malla de destino UEB"><select required disabled={rows.length > 0} value={selectedDestination} onChange={e => { setPair({ ...pair, destino: e.target.value }); clearForm() }}><option value="">Selecciona una malla</option>{curricula.data?.destino.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></Field>
+      </div>
+      {selectedOrigin && selectedDestination && <form className="form-grid manual-comparison-form" onSubmit={save}>
+        <fieldset className="origin-subjects"><legend>Materias de origen <span className="required-mark">*</span></legend><p className="field-hint">Selecciona una o varias. Los créditos se suman; una materia no puede utilizarse dos veces.</p>{sources.map(a => <label key={a.id}><input type="checkbox" disabled={usedOrigins.has(a.id)} checked={origins.includes(a.id)} onChange={e => setOrigins(e.target.checked ? [...origins, a.id] : origins.filter(id => id !== a.id))} /><span><strong>{a.codigo_asignatura} · {a.nombre_asignatura}</strong><small>{a.numero_creditos} créditos{usedOrigins.has(a.id) ? ' · Ya utilizada' : ''}</small></span></label>)}</fieldset>
+        <Field label="Materia de destino"><select required value={target} onChange={e => setTarget(e.target.value)}><option value="">Selecciona una materia</option>{destinations.map(a => <option key={a.id} value={a.id} disabled={usedTargets.has(a.id)}>{a.codigo_asignatura} · {a.nombre_asignatura} ({a.numero_creditos} créditos){usedTargets.has(a.id) ? ' ? Ya comparada' : ''}</option>)}</select></Field>
+        <Field label="Coincidencia de contenidos (%)" hint="Valor evaluado por el coordinador, entre 0 y 100." error={fieldError(action.error, 'porcentaje_coincidencia')}><input required type="number" min={0} max={100} step="0.01" value={percentage} onChange={e => setPercentage(e.target.value)} /></Field>
+        <Field label="Justificación de la equivalencia"><textarea maxLength={2000} value={note} onChange={e => setNote(e.target.value)} placeholder="Describe los contenidos revisados y el motivo de tu decisión." /></Field>
+        <div className="analysis-credit-summary">Créditos de origen: <strong>{credits}</strong> · Destino: <strong>{destinationCredits}</strong></div>
+        <div className="form-actions">{editing && <button type="button" className="btn btn-outline" onClick={clearForm}>Cancelar edición</button>}<button className="btn btn-primary" disabled={action.busy || !origins.length || !target}>{editing ? 'Guardar equivalencia' : 'Añadir equivalencia'}</button></div>
+      </form>}
+    </>)}
+    {rows.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>Materias de origen</th><th>Materia UEB</th><th>Créditos origen / destino</th><th>Coincidencia</th><th>Justificación</th>{editable && <th>Acciones</th>}</tr></thead><tbody>{rows.map(c => <tr key={c.id}><td>{sourcesOf(c).map(a => <div key={a.id}>{a.codigo} · {a.nombre}</div>)}</td><td>{c.asignatura_destino?.nombre}</td><td>{c.creditos_origen_total ?? c.asignatura_origen?.creditos} / {c.asignatura_destino?.creditos}</td><td>{Number(c.porcentaje_coincidencia)}%</td><td>{c.observacion || 'Sin observación'}</td>{editable && <td><div className="row-actions"><button className="btn btn-ghost" disabled={action.busy} onClick={() => { setEditing(c.id); setOrigins(sourcesOf(c).map(a => a.id)); setTarget(String(c.asignatura_destino?.id ?? '')); setPercentage(String(Number(c.porcentaje_coincidencia))); setNote(c.observacion ?? '') }}>Editar</button><button className="btn btn-danger" disabled={action.busy} onClick={() => remove(c.id)}>Eliminar</button></div></td>}</tr>)}</tbody></table></div>}
+        {editable && selectedOrigin && selectedDestination && <form className="analysis-finalize" onSubmit={finish}><Field label="Conclusión de la revisión" hint={!rows.length ? 'Explica por qué no existen equivalencias; este texto es obligatorio si no registraste ninguna.' : undefined}><textarea required={!rows.length} maxLength={2000} value={conclusionNote} onChange={e => setConclusionNote(e.target.value)} /></Field><button className="btn btn-primary" disabled={action.busy || editing !== null}>Finalizar análisis manual</button></form>}
+    {s.resultado && <div className="result-summary"><KeyValue items={[
+      [editable ? 'Resultado provisional' : 'Resultado', conclusionLabels[s.resultado.conclusion_general] ?? s.resultado.conclusion_general],
+      ['Créditos reconocidos', s.resultado.total_creditos_reconocidos],
+      ['Créditos de destino', s.resultado.total_creditos_destino],
+      ['Cobertura de destino', s.resultado.porcentaje_cobertura != null ? s.resultado.porcentaje_cobertura + '%' : 'Sin registro'],
+      ['Informe', s.resultado.informe_tecnico_disponible ? 'Disponible' : 'Pendiente de generación'],
+    ]} /><div className="page-actions">
+      {['revisado', 'aprobado'].includes(estado) && !s.resultado.informe_tecnico_disponible && <button className="btn btn-primary" disabled={action.busy} onClick={generateReport}><FileText size={15} /> Generar informe académico</button>}
+      {s.resultado.informe_tecnico_disponible && <button className="btn btn-outline" disabled={action.busy} onClick={() => action.run(() => download(`/coordinator/solicitudes/${s.id}/technical-report`, `informe-academico-${s.id}.pdf`))}><Download size={15} /> Descargar informe</button>}
+    </div></div>}
+  </Panel>
 }
 
 // ---------------------------------------------------------------------------
@@ -243,57 +227,25 @@ export function ResolucionForm({ endpoint, onDone }: { endpoint: string; onDone:
   )
 }
 
-function CambioEstado({ s, onDone }: { s: Detalle; onDone: () => void }) {
-  const catalogo = useAsync(() => getCoordinatorCatalogo(), [])
-  const action = useAction()
-  const [estado, setEstado] = useState('')
-  const [observacion, setObservacion] = useState('')
-  const actual = s.estado_actual?.nombre ?? ''
-
-  // en_proceso avanza al registrar el resultado; en_consejo → listo al registrar la resolución.
-  const opciones = (catalogo.data?.transiciones[actual] ?? []).filter((t) => {
-    if (actual === 'en_proceso') return false
-    if (t === 'listo') return false
-    if (actual === 'en_revision' && t === 'observado') return false // ocurre al observar un documento
-    return true
-  })
-
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    const ok = await action.run(() => api(`/coordinator/solicitudes/${s.id}/state`, { method: 'POST', body: { estado, observacion: observacion || null } }), `Estado cambiado a ${estadoLabel(estado)}.`)
-    if (ok) { setEstado(''); setObservacion(''); onDone() }
-  }
-
-  if (!opciones.length) return null
-
-  return (
-    <Panel title="Avanzar la solicitud">
-      <Alert error={action.error} message={action.message} />
-      <form className="form-grid" onSubmit={submit}>
-        <Field label="Nuevo estado"><select required value={estado} onChange={(e) => setEstado(e.target.value)}><option value="">Selecciona…</option>{opciones.map((o) => <option key={o} value={o}>{estadoLabel(o)}</option>)}</select></Field>
-        <Field label={estado === 'rechazado' ? 'Motivo del rechazo (obligatorio)' : 'Observación (opcional)'} error={fieldError(action.error, 'observacion')}><input required={estado === 'rechazado'} maxLength={2000} value={observacion} onChange={(e) => setObservacion(e.target.value)} /></Field>
-        <div className="form-actions"><button className={`btn ${estado === 'rechazado' ? 'btn-danger' : 'btn-primary'}`} disabled={action.busy || !estado}>Confirmar</button></div>
-      </form>
-    </Panel>
-  )
-}
-
 // ---------------------------------------------------------------------------
 
 export function CoordinatorSolicitudDetalle({ id }: { id: number }) {
   const detail = useAsync(() => api<{ data: Detalle }>(`/coordinator/solicitudes/${id}`).then((r) => r.data), [id])
-  const [version, setVersion] = useState(0)
-  const refresh = () => { detail.reload(); setVersion((v) => v + 1) }
+  const refresh = () => { void detail.reload() }
 
   if (detail.loading && !detail.data) return <Loading />
-  if (!detail.data) return <><PageHeader title={`Solicitud #${id}`} back="solicitudes" /><Alert error={detail.error instanceof ApiError && detail.error.status === 404 ? new Error('La solicitud no existe o no pertenece a tus carreras.') : detail.error} onRetry={detail.reload} /></>
+  if (!detail.data) return <><PageHeader icon={FileText} title={`Solicitud #${id}`} back="solicitudes" /><Alert error={detail.error instanceof ApiError && detail.error.status === 404 ? new Error('La solicitud no existe o no pertenece a tu coordinación.') : detail.error} onRetry={detail.reload} /></>
   const s = detail.data
   const estado = s.estado_actual?.nombre ?? ''
 
   return (
     <>
-      <PageHeader back="solicitudes" kicker={`SOLICITUD #${s.id}`} title={s.estudiante?.nombres_completos ?? `Solicitud #${s.id}`} subtitle={s.tramite ? `${s.tramite.tipo_tramite.nombre} · ${s.tramite.tipo_proceso.nombre}` : undefined} actions={<StatusPill estado={estado} />} />
-      {estado === 'pendiente' && <div className="api-info">El estudiante todavía no envía esta solicitud a revisión.</div>}
+      <PageHeader icon={FileText} back="solicitudes" kicker={`SOLICITUD #${s.id}`} title={s.estudiante?.nombres_completos ?? `Solicitud #${s.id}`} subtitle={s.tramite ? tramiteLabel(s.tramite) : undefined} actions={<StatusPill estado={estado} />} />
+      <Alert error={detail.error} onRetry={detail.reload} />
+      {(s.estudiante?.procesos_anteriores ?? 0) > 0 && <div className="api-info">Este estudiante registra {s.estudiante?.procesos_anteriores} proceso(s) anterior(es). Consulta su historial en Estudiantes → Procesos.</div>}
+      {s.carrera_origen && <Panel title="Origen de los estudios"><KeyValue items={[["Universidad de origen", s.procedencia_estudios], ["Carrera de origen", s.carrera_origen], ["Carrera de destino UEB", s.carrera?.nombre]]} /></Panel>}
+      {detail.refreshing && <p className="muted" role="status">Actualizando expediente…</p>}
+      {estado === 'pendiente' && <div className="api-info">La revisión iniciará al registrar la entrega presencial de los documentos.</div>}
       <div className="grid-2">
         <Panel title="Expediente">
           <KeyValue items={[['Estudiante', s.estudiante?.nombres_completos], ['Cédula', s.estudiante?.cedula], ['Correo', s.estudiante?.email], ['Carrera de destino', s.carrera?.nombre], ['Procedencia', s.procedencia_estudios], ['Creada', formatDate(s.created_at, true)]]} />
@@ -302,9 +254,9 @@ export function CoordinatorSolicitudDetalle({ id }: { id: number }) {
           <Timeline items={(s.historial_estados ?? []).slice().reverse().map((h) => ({ id: h.id, estado: h.estado.nombre, observacion: h.observacion, fecha: formatDate(h.created_at, true), actor: h.usuario_responsable?.nombres_completos }))} />
         </Panel>
       </div>
-      <CambioEstado key={`estado-${version}`} s={s} onDone={refresh} />
-      <Documentos key={`docs-${version}`} solicitudId={s.id} estado={estado} onChanged={refresh} />
-      <Analisis key={`analisis-${version}`} s={s} onChanged={refresh} />
+      <div className="api-info">El estado avanza automáticamente con la revisión documental, la comparación de mallas y la generación del informe.</div>
+      <Documentos solicitudId={s.id} estado={estado} onChanged={refresh} />
+      <Analisis s={s} onChanged={refresh} />
       {estado === 'en_consejo' && !s.resolucion && <ResolucionForm endpoint={`/coordinator/solicitudes/${s.id}/resolution`} onDone={refresh} />}
       {s.resolucion && (
         <Panel title="Resolución">

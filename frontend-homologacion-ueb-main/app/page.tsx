@@ -1,28 +1,37 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { FormEvent, useEffect, useState } from 'react'
-import { ArrowRight, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { ApiUser, getCurrentUser, getToken, loginRequest, logoutRequest, onUnauthorized, primaryRole, UserRole } from '@/lib/api'
 import { useHashRoute } from '@/lib/router'
 import { BrandMark } from '@/components/app/brand'
 import { AppShell } from '@/components/app/shell'
-import { PageHeader } from '@/components/app/ui'
-import { DashboardView } from '@/views/dashboard'
-import { EstudiantesList, SolicitudesList } from '@/views/shared'
-import { StudentSolicitudes } from '@/views/student/solicitudes'
-import { StudentSolicitudDetalle } from '@/views/student/solicitud-detalle'
-import { StudentPerfil } from '@/views/student/perfil'
-import { StudentNotificaciones } from '@/views/student/notificaciones'
-import { CoordinatorSolicitudDetalle } from '@/views/coordinator/solicitud-detalle'
-import { MallaDetalle, MallasList } from '@/views/coordinator/mallas'
-import { AdminUsuarios } from '@/views/admin/usuarios'
-import { AdminSolicitudDetalle } from '@/views/admin/solicitud-detalle'
+import { Loading, PageHeader } from '@/components/app/ui'
+
+// Descargar cada secci?n cuando se abre, evitando cargar todos los paneles al iniciar.
+const AdminCatalogos = dynamic(() => import('@/views/admin/catalogos').then((module) => module.AdminCatalogos), { loading: () => <Loading text="Cargando secci?n?" /> })
+const CoordinatorStudents = dynamic(() => import('@/views/coordinator/estudiantes').then((module) => module.CoordinatorStudents), { loading: () => <Loading text="Cargando secci?n?" /> })
+const AdminRequirements = dynamic(() => import('@/views/coordinator/requisitos').then(module => module.AdminRequirements))
+const CoordinatorRequirements = dynamic(() => import('@/views/coordinator/requisitos').then((module) => module.CoordinatorRequirements), { loading: () => <Loading text="Cargando secci?n?" /> })
+const PasswordView = dynamic(() => import('@/views/password').then((module) => module.PasswordView), { loading: () => <Loading text="Cargando secci?n?" /> })
+const DashboardView = dynamic(() => import('@/views/dashboard').then((module) => module.DashboardView), { loading: () => <Loading text="Cargando secci?n?" /> })
+const EstudiantesList = dynamic(() => import('@/views/shared').then((module) => module.EstudiantesList), { loading: () => <Loading text="Cargando secci?n?" /> })
+const SolicitudesList = dynamic(() => import('@/views/shared').then((module) => module.SolicitudesList), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentSolicitudes = dynamic(() => import('@/views/student/solicitudes').then((module) => module.StudentSolicitudes), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentSolicitudDetalle = dynamic(() => import('@/views/student/solicitud-detalle').then((module) => module.StudentSolicitudDetalle), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentPerfil = dynamic(() => import('@/views/student/perfil').then((module) => module.StudentPerfil), { loading: () => <Loading text="Cargando secci?n?" /> })
+const StudentNotificaciones = dynamic(() => import('@/views/student/notificaciones').then((module) => module.StudentNotificaciones), { loading: () => <Loading text="Cargando secci?n?" /> })
+const CoordinatorSolicitudDetalle = dynamic(() => import('@/views/coordinator/solicitud-detalle').then((module) => module.CoordinatorSolicitudDetalle), { loading: () => <Loading text="Cargando secci?n?" /> })
+const MallaDetalle = dynamic(() => import('@/views/coordinator/mallas').then((module) => module.MallaDetalle), { loading: () => <Loading text="Cargando secci?n?" /> })
+const MallasList = dynamic(() => import('@/views/coordinator/mallas').then((module) => module.MallasList), { loading: () => <Loading text="Cargando secci?n?" /> })
+const AdminUsuarios = dynamic(() => import('@/views/admin/usuarios').then((module) => module.AdminUsuarios), { loading: () => <Loading text="Cargando secci?n?" /> })
 
 // ---------------------------------------------------------------------------
 // Login
 // ---------------------------------------------------------------------------
 
-function LoginView({ onLogin, notice }: { onLogin: (user: ApiUser) => void; notice?: string }) {
+function LoginView({ onLogin, notice, onRecover }: { onLogin: (user: ApiUser) => void; notice?: string; onRecover: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
@@ -58,17 +67,16 @@ function LoginView({ onLogin, notice }: { onLogin: (user: ApiUser) => void; noti
         <div className="mountain-badge"><ShieldCheck size={16} /> Plataforma segura UEB</div>
       </div>
       <section className="login-panel">
-        <div className="login-top"><BrandMark /><button className="help-button" aria-label="Ayuda">?</button></div>
         <div className="login-content">
-          <div className="mascot-wrap"><img src="/images/foxi-login.png" alt="Foxi, el zorro mascota de la Universidad Estatal de Bolívar" /></div>
+          <div className="login-top"><BrandMark /><div className="login-brand-actions"><div className="mascot-wrap"><img src="/images/foxi-login.png" alt="Foxi, mascota de la UEB" /></div><button className="help-button" aria-label="Ayuda">?</button></div></div>
           <p className="section-kicker">PORTAL DE HOMOLOGACIÓN</p>
           <h2>Bienvenido de nuevo</h2>
           <p className="login-subtitle">Ingresa tus credenciales para continuar con tu solicitud.</p>
           {notice && <p className="form-notice" role="status">{notice}</p>}
           <form onSubmit={handleSubmit}>
-            <label>Correo institucional<input type="email" placeholder="nombre@ueb.edu.ec" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required /></label>
-            <label>Contraseña<div className="password-field"><input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /><button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)}>{showPassword ? 'Ocultar' : 'Mostrar'}</button></div></label>
-            <div className="form-row"><label className="remember"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> <span>Recordarme</span></label><span className="forgot-hint" title="Las cuentas las gestiona el Administrador">¿Olvidaste tu contraseña? Contacta al Administrador</span></div>
+            <label>Correo electrónico<input type="email" placeholder="nombre@ejemplo.com" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required /></label>
+            <label>Contraseña<div className="password-field"><input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /><button type="button" className="password-toggle" aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}</button></div></label>
+            <div className="form-row"><label className="remember"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> <span>Recordarme</span></label><button type="button" className="link-button" onClick={onRecover}>¿Olvidaste tu contraseña?</button></div>
             {error && <p className="form-error" role="alert">{error}</p>}<button className="primary-button" type="submit" disabled={loading}>{loading ? 'Validando...' : 'Ingresar al sistema'} {!loading && <ArrowRight size={17} />}</button>
           </form>
           <div className="login-note"><ShieldCheck size={15} /> Tus datos están protegidos por la infraestructura institucional.</div>
@@ -101,13 +109,15 @@ function RoleRoutes({ user, role, segments }: { user: ApiUser; role: UserRole; s
 
   if (role === 'coordinador') {
     if (section === 'solicitudes') return Number.isFinite(id) ? <CoordinatorSolicitudDetalle id={id} /> : <SolicitudesList base="/coordinator" careers={user.carreras_coordinadas} />
-    if (section === 'estudiantes') return <EstudiantesList base="/coordinator" />
+    if (section === 'estudiantes') return <CoordinatorStudents me={user} />
+    if (section === 'requisitos') return <CoordinatorRequirements />
     if (section === 'mallas') return Number.isFinite(id) ? <MallaDetalle id={id} /> : <MallasList />
   }
 
   if (role === 'administrador') {
+    if (section === 'requisitos') return <AdminRequirements />
+    if (section === 'catalogos') return <AdminCatalogos />
     if (section === 'usuarios') return <AdminUsuarios me={user} />
-    if (section === 'solicitudes') return Number.isFinite(id) ? <AdminSolicitudDetalle id={id} /> : <SolicitudesList base="/admin" />
     if (section === 'estudiantes') return <EstudiantesList base="/admin" />
   }
 
@@ -143,8 +153,11 @@ export default function Page() {
   const [user, setUser] = useState<ApiUser | null>(null)
   const [checking, setChecking] = useState(true)
   const [notice, setNotice] = useState('')
+  const [passwordMode, setPasswordMode] = useState<'forgot' | 'reset' | null>(null)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('reset_token') || params.has('token')) setPasswordMode('reset')
     onUnauthorized(() => {
       setUser(null)
       setNotice('Tu sesión expiró o fue cerrada. Inicia sesión nuevamente.')
@@ -165,6 +178,8 @@ export default function Page() {
     setNotice('')
     setUser(null)
     window.location.hash = ''
+    window.history.replaceState({}, '', '/')
+    setPasswordMode(null)
   }
 
   function handleLogin(loggedUser: ApiUser) {
@@ -174,6 +189,8 @@ export default function Page() {
   }
 
   if (checking) return <main className="session-loading"><BrandMark /><p>Verificando sesión...</p></main>
-  if (!user) return <LoginView notice={notice} onLogin={handleLogin} />
+  if (passwordMode) return <PasswordView mode={passwordMode} onDone={handleLogout} />
+  if (user?.password_temporal || user?.must_change_password) return <PasswordView mode="change" loginEmail={user.email} onChanged={handleLogin} onDone={handleLogout} />
+  if (!user) return <LoginView notice={notice} onLogin={handleLogin} onRecover={() => setPasswordMode('forgot')} />
   return <AuthenticatedApp key={user.id} user={user} onLogout={handleLogout} />
 }

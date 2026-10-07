@@ -1,8 +1,8 @@
 'use client'
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
-import { ApiError } from '@/lib/api'
+import { Children, isValidElement, ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleX, Clock3, SearchCheck, Inbox, LoaderCircle, RotateCcw, type LucideIcon } from 'lucide-react'
+import { ApiError, invalidateApiCache } from '@/lib/api'
 import { estadoClass, estadoLabel } from '@/lib/format'
 import { href } from '@/lib/router'
 
@@ -13,25 +13,42 @@ import { href } from '@/lib/router'
 export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<ApiError | Error | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [pending, setPending] = useState(true)
   const loaderRef = useRef(loader)
+  const sequence = useRef(0)
+  const mounted = useRef(false)
   loaderRef.current = loader
-
-  const reload = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async () => {
+    const request = ++sequence.current
+    setPending(true)
     setError(null)
     try {
-      setData(await loaderRef.current())
+      const result = await loaderRef.current()
+      if (mounted.current && request === sequence.current) setData(result)
     } catch (err) {
-      setError(err as Error)
+      if (mounted.current && request === sequence.current) setError(err as Error)
     } finally {
-      setLoading(false)
+      if (mounted.current && request === sequence.current) setPending(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
+  const reload = useCallback(async () => { invalidateApiCache(); await load() }, [load])
+  useEffect(() => {
+    mounted.current = true
+    void load()
+    return () => { mounted.current = false; sequence.current++ }
+  }, [load])
+  // Mantener el contenido visible durante actualizaciones en segundo plano.
+  return { data, error, loading: pending && data === null, refreshing: pending && data !== null, reload, setData }
+}
 
-  useEffect(() => { reload() }, [reload])
-  return { data, error, loading, reload, setData }
+export function useDebouncedValue<T>(value: T, delay = 250) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debounced
 }
 
 /** Ejecuta una acción de escritura mostrando su error y ocupado. */
@@ -68,13 +85,13 @@ export function fieldError(error: unknown, field: string): string | undefined {
 // Presentación
 // ---------------------------------------------------------------------------
 
-export function PageHeader({ kicker, title, subtitle, back, actions }: { kicker?: string; title: string; subtitle?: string; back?: string; actions?: ReactNode }) {
+export function PageHeader({ kicker, title, subtitle, back, actions, icon: Icon }: { kicker?: string; title: string; subtitle?: string; back?: string; actions?: ReactNode; icon?: LucideIcon }) {
   return (
     <div className="page-head">
       <div>
         {back && <a className="back-link" href={href(back)}><ArrowLeft size={14} /> Volver</a>}
         {kicker && <p className="section-kicker">{kicker}</p>}
-        <h2>{title}</h2>
+        <h2 className="page-title">{Icon && <span className="page-title-icon"><Icon size={21} aria-hidden="true" /></span>}{title}</h2>
         {subtitle && <p className="page-subtitle">{subtitle}</p>}
       </div>
       {actions && <div className="page-actions">{actions}</div>}
@@ -91,30 +108,34 @@ export function Panel({ title, actions, children, className = '' }: { title?: st
   )
 }
 
-export function Alert({ error, message, onRetry }: { error?: Error | null; message?: string; onRetry?: () => void }) {
+export function Alert({ error, message, onRetry, inlineFields = false }: { error?: Error | null; message?: string; onRetry?: () => void; inlineFields?: boolean }) {
   if (error) {
-    const fields = error instanceof ApiError ? Object.values(error.errors).flat() : []
+    const fields = error instanceof ApiError ? [...new Set(Object.values(error.errors).flat())] : []
+    if (inlineFields && fields.length) return null
     return (
       <div className="api-alert" role="alert">
-        <span>{error.message}{fields.length > 1 && <small>{fields.join(' ')}</small>}</span>
-        {onRetry && <button onClick={onRetry}>Reintentar</button>}
+        <CircleAlert className="feedback-icon" size={19} aria-hidden="true" />
+        <div><strong>{fields.length ? 'Revisa los siguientes datos para continuar:' : error.message}</strong>{fields.length > 0 && <ul>{fields.map(text => <li key={text}>{text}</li>)}</ul>}</div>
+        {onRetry && <button onClick={onRetry}><RotateCcw size={14} aria-hidden="true" />Reintentar</button>}
       </div>
     )
   }
-  if (message) return <div className="api-success" role="status">{message}</div>
+  if (message) return <div className="api-success" role="status"><CircleCheck className="feedback-icon" size={19} aria-hidden="true" /><span>{message}</span></div>
   return null
 }
 
 export function Loading({ text = 'Cargando...' }: { text?: string }) {
-  return <div className="empty-row">{text}</div>
+  return <div className="empty-row visual-empty" role="status"><LoaderCircle className="loading-icon" size={24} aria-hidden="true" /><span>{text}</span></div>
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="empty-row">{children}</div>
+  return <div className="empty-row visual-empty"><span className="empty-icon"><Inbox size={24} aria-hidden="true" /></span><div>{children}</div></div>
 }
 
 export function StatusPill({ estado }: { estado?: string | null }) {
-  return <span className={`status ${estadoClass(estado)}`}><i />{estadoLabel(estado)}</span>
+  const tone = estadoClass(estado)
+  const Icon = tone === 'approved' ? CircleCheck : tone === 'rejected' ? CircleX : estado === 'observado' ? CircleAlert : estado === 'en_revision' || estado === 'en_proceso' ? SearchCheck : Clock3
+  return <span className={`status ${tone}`}><Icon size={15} aria-hidden="true" />{estadoLabel(estado)}</span>
 }
 
 export function Pager({ meta, onPage }: { meta?: { current_page: number; last_page: number; total: number }; onPage: (page: number) => void }) {
@@ -130,13 +151,14 @@ export function Pager({ meta, onPage }: { meta?: { current_page: number; last_pa
   )
 }
 
-export function Field({ label, error, children, hint }: { label: string; error?: string; hint?: string; children: ReactNode }) {
+export function Field({ label, error, children, hint, required }: { label: string; error?: string; hint?: string; children: ReactNode; required?: boolean }) {
+  const mandatory = required ?? Children.toArray(children).some(child => isValidElement<{ required?: boolean }>(child) && child.props.required)
   return (
     <label className="field">
-      <span>{label}</span>
+      <span>{label}{mandatory && <><span className="required-mark" aria-hidden="true"> *</span><span className="sr-only"> (obligatorio)</span></>}</span>
       {children}
       {hint && !error && <small className="field-hint">{hint}</small>}
-      {error && <small className="field-error">{error}</small>}
+      {error && <small className="field-error" role="alert">{error}</small>}
     </label>
   )
 }
